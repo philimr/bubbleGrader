@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bubble Sheet Grader</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header>
+  <div class="brand">⬤ <b>GRADER</b></div>
+  <nav id="navBar">
+    <button class="nb on" data-tab="setup">Setup</button>
+    <button class="nb" data-tab="template">Template</button>
+    <button class="nb" data-tab="scan">Scan</button>
+    <button class="nb" data-tab="results">Results</button>
+  </nav>
+  <div class="hstats">
+    <span>Class: <b id="hClass">—</b></span>
+    <span>Graded: <b id="hGraded">0</b></span>
+    <span>Avg: <b id="hAvg">—</b></span>
+  </div>
+</header>
+
+<!-- SETUP -->
+<div class="tab on" id="tab-setup">
+  <div class="card">
+    <div class="ch">
+      <div class="ct">Class Info</div>
+      <div class="row">
+        <button class="btn sm" onclick="clearResultsOnly()">Clear results</button>
+        <button class="btn sm" onclick="clearKeyAndResults()">Clear key + results</button>
+      </div>
+    </div>
+    <div class="fr">
+      <div class="fg">
+        <label class="fl">Class / Course Name</label>
+        <input type="text" id="className" placeholder="e.g. Biology 101 – Period 3">
+      </div>
+      <div class="fg" style="max-width:155px">
+        <label class="fl">Passing Score %</label>
+        <input type="number" id="passPct" value="70" min="1" max="100">
+      </div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="ch">
+      <div class="ct">Answer Key — 50 Questions (A–E)</div>
+      <div class="row">
+        <button class="btn sm" onclick="randomKey()">Random fill</button>
+        <button class="btn sm" onclick="clearKey()">Clear all</button>
+        <button class="btn sm" onclick="exportKeyCSV()">↓ Export CSV</button>
+        <label for="keyFile" class="btn sm" style="cursor:pointer">↑ Import CSV</label>
+        <input type="file" id="keyFile" accept=".csv,text/csv" onchange="importKeyCSV(event)" style="display:none">
+      </div>
+    </div>
+    <p class="hint">Click the correct answer letter for each question. Leave blank to skip scoring that question.</p>
+    <div class="kg" id="keyGrid"></div>
+  </div>
+</div>
+
+<!-- TEMPLATE -->
+<div class="tab" id="tab-template">
+  <div class="card">
+    <div class="ch">
+      <div class="ct">Printable Answer Sheet</div>
+      <div class="row">
+        <button class="btn sm" onclick="dlSVG()">↓ Download SVG</button>
+        <button class="btn pa" onclick="printTpl()">⎙ Print</button>
+      </div>
+    </div>
+    <p class="hint">Print on standard 8.5 × 11" letter paper. The four solid black squares at each corner are <strong>positional markers</strong> — keep them completely unobstructed. Students fill bubbles fully with a dark pen or pencil.</p>
+    <div id="tplPrev"></div>
+  </div>
+</div>
+
+<!-- SCAN -->
+<div class="tab" id="tab-scan">
+  <div class="card">
+    <div class="ch"><div class="ct">Student Info</div></div>
+    <div class="fr">
+      <div class="fg">
+        <label class="fl">Student Name</label>
+        <input type="text" id="stuName" placeholder="Enter student name (optional — auto-numbered if blank)">
+      </div>
+    </div>
+  </div>
+
+  <!-- Session state bar — visible when auto-rotation is active -->
+  <div id="sessionInfo" class="card" style="display:none;padding:10px 18px;margin-bottom:0">
+    <div class="row">
+      <span class="adj-lbl">Session:</span>
+      <span id="sessionRotBadge" class="bdg" style="display:none;background:var(--abg);color:var(--accent)"></span>
+      <button class="btn sm" id="btnClearRot" onclick="resetPreview()" style="display:none">Reset preview</button>
+    </div>
+  </div>
+
+  <div id="scanAlert"></div>
+
+  <div class="methods">
+    <div class="method on" id="mUpload" onclick="setMethod('upload')">
+      <div class="mi">🖼</div>
+      <div class="mt">Upload Photo</div>
+      <div class="md">Take a photo on your phone, then upload it here — works everywhere</div>
+    </div>
+    <div class="method" id="mCamera" onclick="setMethod('camera')">
+      <div class="mi">📷</div>
+      <div class="mt">Live Camera</div>
+      <div class="md">Use your webcam in real time — requires HTTPS or localhost</div>
+    </div>
+  </div>
+
+  <!-- Upload panel -->
+  <div class="card" id="uploadPanel">
+    <div class="ch"><div class="ct">Upload Sheet Photo</div></div>
+    <p class="hint">Photograph the completed sheet so all 4 corner squares are visible and the paper lies flat. Then choose the photo below.</p>
+    <div class="row">
+      <label for="imgFile" class="btn pa" style="cursor:pointer">📂 Choose Photo…</label>
+      <input type="file" id="imgFile" accept="image/*" onchange="handleUpload(event)">
+      <span id="uploadName" style="font-size:12px;color:var(--muted)"></span>
+    </div>
+  </div>
+
+  <!-- Camera panel -->
+  <div class="card" id="cameraPanel" style="display:none">
+    <div class="ch">
+      <div class="ct">Live Camera</div>
+      <div class="row">
+        <button class="btn sm" id="btnStartCam" onclick="startCam()">Start Camera</button>
+        <button class="btn sm" id="btnCap" onclick="captureFrame()" style="display:none">◉ Capture &amp; Scan</button>
+      </div>
+    </div>
+    <p class="hint">Hold the sheet flat under the camera. All 4 corner squares must be in frame. Fill the view as much as possible.</p>
+    <div class="cambox" id="camBox">
+      <div class="camhint" id="camHint">Click "Start Camera" to begin</div>
+      <video id="videoEl" autoplay playsinline style="display:none"></video>
+      <canvas id="livePreviewCanvas" style="display:none"></canvas>
+      <div id="procOverlay">
+        <div class="spin"></div>
+        <span>Scanning…</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Pre-scan adjustment (shown after image loaded, before processing) -->
+  <div class="card" id="preScanCard" style="display:none">
+    <div class="ch">
+      <div class="ct">Adjust &amp; Scan</div>
+      <div class="row">
+        <button class="btn pa" onclick="scanPending()">⬤ Scan</button>
+      </div>
+    </div>
+    <p class="hint">Click <strong>Scan</strong>. The scanner will detect the sheet orientation automatically.</p>
+    <canvas id="preScanCanvas" class="scan-canvas"></canvas>
+  </div>
+
+  <!-- Result image card (shown after scan) -->
+  <div class="card" id="resultImgCard" style="display:none">
+    <div class="ch">
+      <div class="ct">Scanned Image</div>
+      <div class="row">
+        <button class="btn sm" onclick="retake()">↺ Rescan</button>
+        <button class="btn sm" id="btnAdjust" onclick="toggleAdjustMode()">⊕ Adjust Corners</button>
+        <button class="btn ga" id="btnSave" onclick="saveStudent()">✓ Save &amp; Next Student</button>
+      </div>
+    </div>
+    <div id="adjControls" style="display:none">
+      <p class="hint">Drag the <strong>4 amber handles</strong> onto the 4 black corner squares — <strong>any order</strong>, the code sorts them automatically. The image is treated as right-side up, so the white circles should line up with the printed bubbles.</p>
+      <div class="row">
+        <button class="btn pa" onclick="reGradeManual()">⬤ Re-grade</button>
+      </div>
+    </div>
+    <canvas id="overlayCanvas" class="scan-canvas"></canvas>
+  </div>
+
+  <!-- Score + detected answers -->
+  <div id="scanResult" style="display:none">
+    <div class="card">
+      <div class="ch"><div class="ct">Score</div></div>
+      <div class="scbox" id="scoreBig"></div>
+    </div>
+    <div class="card">
+      <div class="ch"><div class="ct">Detected Answers</div></div>
+      <div class="ag" id="ansGrid"></div>
+    </div>
+  </div>
+</div>
+
+<!-- RESULTS -->
+<div class="tab" id="tab-results">
+  <div class="card">
+    <div class="ch">
+      <div class="ct">Saved Data</div>
+      <div class="row">
+        <button class="btn sm" onclick="clearResultsOnly()">Clear results</button>
+        <button class="btn sm" onclick="clearKeyAndResults()">Clear key + results</button>
+      </div>
+    </div>
+    <p class="hint">Clear results to reuse the current answer key for a new class. Clear key + results to start from scratch.</p>
+  </div>
+  <div id="noRes" class="card" style="text-align:center;color:var(--muted);padding:44px">
+    No students graded yet. Use the <strong>Scan</strong> tab to grade sheets.
+  </div>
+  <div id="resContent" style="display:none">
+    <div class="stats4" id="statsRow"></div>
+    <div class="card">
+      <div class="ch">
+        <div class="ct">Class Scores</div>
+        <button class="btn pa" onclick="exportCSV()">↓ Export CSV</button>
+      </div>
+      <table class="rt">
+        <thead><tr><th>#</th><th>Student</th><th>Score</th><th>%</th><th>Status</th><th></th></tr></thead>
+        <tbody id="resBody"></tbody>
+      </table>
+    </div>
+    <div class="card">
+      <div class="ch">
+        <div class="ct">Per-Question Analytics</div>
+        <span style="font-size:12px;color:var(--muted)">Green = correct answer &nbsp;·&nbsp; Amber = most-chosen wrong answer</span>
+      </div>
+      <div class="aqg" id="aqGrid"></div>
+    </div>
+  </div>
+</div>
+
+<canvas id="captCanvas" style="display:none"></canvas>
+
+<script src="app.js"></script>
+</body>
+</html>
