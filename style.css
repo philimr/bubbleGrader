@@ -148,10 +148,13 @@ input[type=file]{display:none}
 
 .hint{font-size:12px;color:var(--muted);margin-bottom:11px;line-height:1.6}
 .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.canvas-actions{justify-content:center;width:100%;margin-bottom:12px}
+.canvas-actions.below{margin-top:12px}
 
 .scan-canvas{max-height:383px;width:auto;max-width:75%;display:block;border-radius:7px;background:#111;margin:0 auto}
 .scan-canvas.portrait{max-height:766px;max-width:100%}
 #overlayCanvas.scan-canvas{background:transparent}
+#livePreviewCanvas{cursor:pointer}
 
 /* Corner adjustment */
 #adjControls{padding:10px 0 12px;border-bottom:1px solid var(--bdr);margin-bottom:12px}
