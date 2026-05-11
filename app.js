@@ -283,7 +283,7 @@ function retake(){
   adjDragging=-1;
   exitCropMode(); exitPerspCropMode();
   document.getElementById('adjControls').style.display='none';
-  document.getElementById('btnAdjust').textContent='⊕ Adjust Corners';
+  setAdjustButtonText('⊕ Adjust Corners');
   document.getElementById('preScanCard').style.display='none';
   var isCamera=document.getElementById('mCamera').classList.contains('on');
   document.getElementById('uploadPanel').style.display=isCamera?'none':'';
@@ -329,6 +329,17 @@ function stopVideoPreview(){
 function setScanCanvasOrientationClass(canvas){
   if(!canvas) return;
   canvas.classList.toggle('portrait',canvas.height>canvas.width);
+}
+
+function setAdjustButtonText(text){
+  document.querySelectorAll('.btnAdjust').forEach(function(b){ b.textContent=text; });
+}
+
+function setSaveButtons(disabled,text){
+  document.querySelectorAll('.btnSave').forEach(function(b){
+    b.disabled=disabled;
+    b.textContent=text;
+  });
 }
 
 // ── Pre-scan controls ──
@@ -765,8 +776,7 @@ function showScore(det){
   }
   document.getElementById('scanResult').style.display='';
   setAlert('ok','Scan complete — review the answers, then save or rescan.');
-  var sb=document.getElementById('btnSave');
-  if(sb){sb.disabled=false;sb.textContent='✓ Save & Next Student';}
+  setSaveButtons(false,'✓ Save & Next Student');
 }
 
 function saveStudent(){
@@ -786,8 +796,7 @@ function saveStudent(){
   document.getElementById('uploadPanel').style.display=isCamera?'none':'';
   document.getElementById('cameraPanel').style.display=isCamera?'':'none';
   if(S.stream){ startVideoPreview(); document.getElementById('btnCap').style.display=''; }
-  var sb=document.getElementById('btnSave');
-  if(sb){sb.disabled=true;sb.textContent='✓ Saved!';}
+  setSaveButtons(true,'✓ Saved!');
   setAlert('ok','Saved: '+name+' — '+r.correct+'/'+r.total+' ('+r.pct+'%). Load next student photo above.');
 }
 
@@ -818,7 +827,7 @@ function enterAdjustMode(){
       :[[lr.W*0.05,lr.H*0.05],[lr.W*0.95,lr.H*0.05],[lr.W*0.05,lr.H*0.95],[lr.W*0.95,lr.H*0.95]];
   }
   document.getElementById('adjControls').style.display='';
-  document.getElementById('btnAdjust').textContent='✕ Cancel';
+  setAdjustButtonText('✕ Cancel');
   document.getElementById('overlayCanvas').style.cursor='crosshair';
   redrawHandles();
 }
@@ -826,7 +835,7 @@ function enterAdjustMode(){
 function exitAdjustMode(skipRedraw){
   adjDragging=-1;
   document.getElementById('adjControls').style.display='none';
-  document.getElementById('btnAdjust').textContent='⊕ Adjust Corners';
+  setAdjustButtonText('⊕ Adjust Corners');
   document.getElementById('overlayCanvas').style.cursor='';
   if(!skipRedraw){
     var lr=S.lastRender;
@@ -1057,7 +1066,7 @@ function rotateResult(deg){
   // Reset adjust UI before re-scanning so processImage starts clean
   adjDragging=-1;
   document.getElementById('adjControls').style.display='none';
-  document.getElementById('btnAdjust').textContent='⊕ Adjust Corners';
+  setAdjustButtonText('⊕ Adjust Corners');
   document.getElementById('overlayCanvas').style.cursor='';
   var id=S.rawCanvas.getContext('2d').getImageData(0,0,S.rawCanvas.width,S.rawCanvas.height);
   processImage(id,S.rawCanvas.width,S.rawCanvas.height,S.rawCanvas);
@@ -1197,6 +1206,12 @@ updateHeader();
 buildResults();
 document.getElementById('className').addEventListener('input',function(){ updateHeader(); saveData(); });
 document.getElementById('passPct').addEventListener('input',function(){ saveData(); buildResults(); });
+document.getElementById('livePreviewCanvas').addEventListener('click',function(){
+  if(S.stream&&document.getElementById('btnCap').style.display!=='none') captureFrame();
+});
+document.getElementById('preScanCanvas').addEventListener('click',function(){
+  if(S.rawCanvas&&document.getElementById('preScanCard').style.display!=='none') scanPending();
+});
 
 // Pre-scan drag events — handles both rect crop and 4-corner persp crop
 (function(){
