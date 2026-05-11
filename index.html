@@ -131,7 +131,7 @@
         <button class="btn sm" id="btnCap" onclick="captureFrame()" style="display:none">◉ Capture &amp; Scan</button>
       </div>
     </div>
-    <p class="hint">Hold the sheet flat under the camera. All 4 corner squares must be in frame. Fill the view as much as possible.</p>
+    <p class="hint">Hold the sheet flat under the camera. All 4 corner squares must be in frame. Fill the view as much as possible. Tap the preview to capture.</p>
     <div class="cambox" id="camBox">
       <div class="camhint" id="camHint">Click "Start Camera" to begin</div>
       <video id="videoEl" autoplay playsinline style="display:none"></video>
@@ -147,23 +147,26 @@
   <div class="card" id="preScanCard" style="display:none">
     <div class="ch">
       <div class="ct">Adjust &amp; Scan</div>
-      <div class="row">
-        <button class="btn pa" onclick="scanPending()">⬤ Scan</button>
-      </div>
+    </div>
+    <div class="row canvas-actions">
+      <button class="btn pa" onclick="scanPending()">⬤ Scan</button>
     </div>
     <p class="hint">Click <strong>Scan</strong>. The scanner will detect the sheet orientation automatically.</p>
     <canvas id="preScanCanvas" class="scan-canvas"></canvas>
+    <div class="row canvas-actions below">
+      <button class="btn pa" onclick="scanPending()">⬤ Scan</button>
+    </div>
   </div>
 
   <!-- Result image card (shown after scan) -->
   <div class="card" id="resultImgCard" style="display:none">
     <div class="ch">
       <div class="ct">Scanned Image</div>
-      <div class="row">
-        <button class="btn sm" onclick="retake()">↺ Rescan</button>
-        <button class="btn sm" id="btnAdjust" onclick="toggleAdjustMode()">⊕ Adjust Corners</button>
-        <button class="btn ga" id="btnSave" onclick="saveStudent()">✓ Save &amp; Next Student</button>
-      </div>
+    </div>
+    <div class="row canvas-actions">
+      <button class="btn sm" onclick="retake()">↺ Rescan</button>
+      <button class="btn sm btnAdjust" onclick="toggleAdjustMode()">⊕ Adjust Corners</button>
+      <button class="btn ga btnSave" onclick="saveStudent()">✓ Save &amp; Next Student</button>
     </div>
     <div id="adjControls" style="display:none">
       <p class="hint">Drag the <strong>4 amber handles</strong> onto the 4 black corner squares — <strong>any order</strong>, the code sorts them automatically. The image is treated as right-side up, so the white circles should line up with the printed bubbles.</p>
@@ -172,6 +175,11 @@
       </div>
     </div>
     <canvas id="overlayCanvas" class="scan-canvas"></canvas>
+    <div class="row canvas-actions below">
+      <button class="btn sm" onclick="retake()">↺ Rescan</button>
+      <button class="btn sm btnAdjust" onclick="toggleAdjustMode()">⊕ Adjust Corners</button>
+      <button class="btn ga btnSave" onclick="saveStudent()">✓ Save &amp; Next Student</button>
+    </div>
   </div>
 
   <!-- Score + detected answers -->
