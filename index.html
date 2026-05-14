@@ -40,14 +40,16 @@
       </div>
       <div class="fg" style="max-width:155px">
         <label class="fl">Passing Score %</label>
-        <input type="number" id="passPct" value="70" min="1" max="100">
+        <input type="number" id="passPct" value="60" min="1" max="100">
       </div>
     </div>
   </div>
   <div class="card">
     <div class="ch">
-      <div class="ct">Answer Key — 50 Questions (A–E)</div>
+      <div class="ct" id="keyTitle">Answer Key — 50 Questions (A–E)</div>
       <div class="row">
+        <label class="fl" style="margin:0">Questions</label>
+        <input type="number" id="qCount" min="1" max="100" value="50" style="width:65px" onchange="setQuestionCount(parseInt(this.value)||50)">
         <button class="btn sm" onclick="randomKey()">Random fill</button>
         <button class="btn sm" onclick="clearKey()">Clear all</button>
         <button class="btn sm" onclick="exportKeyCSV()">↓ Export CSV</button>
@@ -66,11 +68,13 @@
     <div class="ch">
       <div class="ct">Printable Answer Sheet</div>
       <div class="row">
+        <span class="adj-lbl">Questions</span>
+        <input type="number" id="tplQCount" min="1" max="100" value="50" style="width:65px" onchange="setQuestionCount(parseInt(this.value)||50)">
         <button class="btn sm" onclick="dlSVG()">↓ Download SVG</button>
         <button class="btn pa" onclick="printTpl()">⎙ Print</button>
       </div>
     </div>
-    <p class="hint">Print on standard 8.5 × 11" letter paper. The four solid black squares at each corner are <strong>positional markers</strong> — keep them completely unobstructed. Students fill bubbles fully with a dark pen or pencil.</p>
+    <p class="hint">Print on standard 8.5 × 11" letter paper. The inset solid black squares are <strong>positional markers</strong> — keep them completely unobstructed. Students fill bubbles fully with a dark pen or pencil.</p>
     <div id="tplPrev"></div>
   </div>
 </div>
@@ -80,9 +84,25 @@
   <div class="card">
     <div class="ch"><div class="ct">Student Info</div></div>
     <div class="fr">
-      <div class="fg">
-        <label class="fl">Student Name</label>
-        <input type="text" id="stuName" placeholder="Enter student name (optional — auto-numbered if blank)">
+      <div class="fg" style="flex:1">
+        <label class="fl">Last Name</label>
+        <input type="text" id="stuLast" placeholder="Auto-filled from roster">
+      </div>
+      <div class="fg" style="flex:1">
+        <label class="fl">First Name</label>
+        <input type="text" id="stuFirst" placeholder="Auto-filled from roster">
+      </div>
+      <div class="fg" style="flex:0 0 150px">
+        <label class="fl">Student ID <span id="stuIdStatus" style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--muted)"></span></label>
+        <input type="text" id="stuIdField" placeholder="auto-detected" maxlength="8" style="font-family:monospace;letter-spacing:.08em">
+      </div>
+      <div class="fg" style="flex:1; position: relative;">
+        <label class="fl">Class Name <button id="btnNextMatch" class="btn sm" style="position: absolute; right:0px; top: 0px;display:none; font-size:8px; padding: 2px 3px;background-color: lightgray;" onclick="nextRosterMatch()">↻ Next Match</button></label>
+        <input type="text" id="scanClassName" placeholder="e.g. Biology 101">
+      </div>
+      <div class="fg" style="flex:0 0 100px">
+        <label class="fl">Period</label>
+        <input type="text" id="scanPeriod" placeholder="e.g. 3">
       </div>
     </div>
   </div>
@@ -114,7 +134,7 @@
   <!-- Upload panel -->
   <div class="card" id="uploadPanel">
     <div class="ch"><div class="ct">Upload Sheet Photo</div></div>
-    <p class="hint">Photograph the completed sheet so all 4 corner squares are visible and the paper lies flat. Then choose the photo below.</p>
+    <p class="hint">Photograph the completed sheet so all inset marker squares are visible and the paper lies flat. Then choose the photo below.</p>
     <div class="row">
       <label for="imgFile" class="btn pa" style="cursor:pointer">📂 Choose Photo…</label>
       <input type="file" id="imgFile" accept="image/*" onchange="handleUpload(event)">
@@ -131,7 +151,7 @@
         <button class="btn sm" id="btnCap" onclick="captureFrame()" style="display:none">◉ Capture &amp; Scan</button>
       </div>
     </div>
-    <p class="hint">Hold the sheet flat under the camera. All 4 corner squares must be in frame. Fill the view as much as possible. Tap the preview to capture.</p>
+    <p class="hint">Hold the sheet flat under the camera. All inset marker squares must be in frame. Fill the view as much as possible. Tap the preview to capture.</p>
     <div class="cambox" id="camBox">
       <div class="camhint" id="camHint">Click "Start Camera" to begin</div>
       <video id="videoEl" autoplay playsinline style="display:none"></video>
@@ -207,6 +227,17 @@
     </div>
     <p class="hint">Clear results to reuse the current answer key for a new class. Clear key + results to start from scratch.</p>
   </div>
+  <div class="card">
+    <div class="ch">
+      <div class="ct">Student Roster</div>
+      <div class="row">
+        <label class="btn sm" for="rosterFile">↑ Upload Roster CSV</label>
+        <input type="file" id="rosterFile" accept=".csv" style="display:none" onchange="importRosterCSV(event)">
+        <button class="btn sm" id="rosterClearBtn" onclick="clearRoster()" style="display:none">✕ Clear Roster</button>
+      </div>
+    </div>
+    <p class="hint" id="rosterStatus">No roster loaded — upload a CSV with StudentID, Last, First (and optionally Class, Section, Period) to map bubble IDs to student names.</p>
+  </div>
   <div id="noRes" class="card" style="text-align:center;color:var(--muted);padding:44px">
     No students graded yet. Use the <strong>Scan</strong> tab to grade sheets.
   </div>
@@ -215,10 +246,11 @@
     <div class="card">
       <div class="ch">
         <div class="ct">Class Scores</div>
+        <span id="lastAdded" style="font-size:12px;color:var(--muted);margin-right:auto;padding-left:12px"></span>
         <button class="btn pa" onclick="exportCSV()">↓ Export CSV</button>
       </div>
       <table class="rt">
-        <thead><tr><th>#</th><th>Student</th><th>Score</th><th>%</th><th>Status</th><th></th></tr></thead>
+        <thead id="resHead"><tr><th>#</th><th>Student</th><th>ID</th><th>Score</th><th>%</th><th>Status</th><th></th></tr></thead>
         <tbody id="resBody"></tbody>
       </table>
     </div>
