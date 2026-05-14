@@ -50,10 +50,11 @@ nav{display:flex}
 .fg{flex:1}
 .fl{display:block;font-size:11px;font-weight:700;text-transform:uppercase;
   letter-spacing:.07em;color:var(--muted);margin-bottom:4px}
-input[type=text],input[type=number]{width:100%;background:var(--surf);border:1px solid var(--bdr);
+input[type=text],input[type=number],select{width:100%;background:var(--surf);border:1px solid var(--bdr);
   color:var(--txt);padding:7px 10px;border-radius:7px;font-size:13px;outline:none;
   transition:border-color .15s;font-family:inherit}
 input:focus{border-color:var(--accent)}
+select{width:auto;padding:4px 9px;font-size:12px;font-weight:600}
 input[type=file]{display:none}
 
 /* Answer key */
@@ -68,12 +69,12 @@ input[type=file]{display:none}
 
 /* Template preview */
 #tplPrev{overflow:auto;background:#d0cfc9;border-radius:7px;display:flex;
-  justify-content:center;padding:14px;max-height:64vh}
+  justify-content:center;flex-wrap:wrap;padding:14px;max-height:64vh}
 #tplPrev img{border:1px solid #bbb;box-shadow:0 2px 14px rgba(0,0,0,.2)}
 
 /* Method selector */
-.methods{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px}
-.method{border:1.5px solid var(--bdr);border-radius:10px;padding:14px;background:var(--surf);
+.methods{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:5px}
+.method{border:1.5px solid var(--bdr);border-radius:10px;padding:5px;background:var(--surf);
   cursor:pointer;transition:all .15s;text-align:center}
 .method:hover,.method.on{border-color:var(--accent);background:var(--abg)}
 .mi{font-size:26px;margin-bottom:5px}
@@ -150,6 +151,8 @@ input[type=file]{display:none}
 .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 .canvas-actions{justify-content:center;width:100%;margin-bottom:12px}
 .canvas-actions.below{margin-top:12px}
+.radio-opt{display:inline-flex;align-items:center;gap:4px;font-size:12px;font-weight:600;color:var(--txt)}
+.radio-opt input{accent-color:var(--accent)}
 
 .scan-canvas{max-height:383px;width:auto;max-width:75%;display:block;border-radius:7px;background:#111;margin:0 auto}
 .scan-canvas.portrait{max-height:766px;max-width:100%}
