@@ -376,10 +376,8 @@ function handleUpload(e){
       cc.width=Math.round(img.width*scale);
       cc.height=Math.round(img.height*scale);
       cc.getContext('2d').drawImage(img,0,0,cc.width,cc.height);
-      S.sessionRotation=0;
       S.baseCanvas=applySessionRotation(cc);
       S.rawCanvas=S.baseCanvas;
-      updateSessionUI();
       showPreScan();
     };
     img.src=ev.target.result;
@@ -1283,11 +1281,6 @@ function enterAdjustMode(){
       }
     }
   }
-  // Clamp all handles to within canvas bounds so none start off-screen
-  var _cW=S.lastRender.W, _cH=S.lastRender.H;
-  function _cl(p){ return [Math.max(1,Math.min(_cW-1,p[0])),Math.max(1,Math.min(_cH-1,p[1]))]; }
-  S.manualCorners=S.manualCorners.map(_cl);
-  if(S.manualMidPts) S.manualMidPts=S.manualMidPts.map(_cl);
   document.getElementById('adjControls').style.display='';
   setAdjustButtonText('✕ Cancel');
   document.getElementById('overlayCanvas').style.cursor='crosshair';
