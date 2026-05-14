@@ -163,12 +163,3 @@ input[type=file]{display:none}
 #adjControls{padding:10px 0 12px;border-bottom:1px solid var(--bdr);margin-bottom:12px}
 .adj-lbl{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);white-space:nowrap}
 
-/* Mobile: maximise scan canvas to fill most of the viewport */
-@media (max-width:768px){
-  .tab{padding:14px 10px}
-  .card{padding:12px;margin-bottom:10px}
-  .scan-canvas{max-height:78vh;max-width:100%}
-  .scan-canvas.portrait{max-height:84vh;max-width:100%}
-  .fr{flex-wrap:wrap}
-  .fg{min-width:140px}
-}
