@@ -1,5 +1,5 @@
 // ── Constants ──
-const SW=816,SH=1056,MK_LG=28,MK_SM=15,MKMG=10,BubR=9,MAXQ=100;
+const SW=816,SH=1056,MK_LG=28,MK_SM=15,MKMG=10,BubR=7.2,MAXQ=100;
 const CH=['A','B','C','D','E'];
 // Fiducial markers placed like ZipGrade: four large corner squares seed the
 // homography; mid-row and bottom markers (including left/right side pairs)
@@ -17,12 +17,14 @@ const BUB_X_100=[
   [414,436,457,479,501],
   [549,571,593,615,637]
 ];
-const STARTY=112, LOWER_STARTY=514, ROWH=28.75, ROW_BREAK=13, MID_Y=486;
-const ID_DIGITS=8, ID_X0=545, ID_DX=23, ID_Y0=648, ID_DY=19.5, ID_R=6.4;
+const STARTY=112, LOWER_STARTY=514, ROWH=23, ROW_BREAK=16, MID_Y=486;
+// Cols 0+1 start 9 rows lower to make room for the ID section at top-left
+const COL12_STARTY=STARTY+9*ROWH, COL12_ROW_BREAK=7;
+const ID_DIGITS=8, ID_X0=170, ID_DX=23, ID_Y0=120, ID_DY=18, ID_R=6.5;
 const ORI_MARK=[88,750];
 function rowY(r){ return r<ROW_BREAK?STARTY+r*ROWH:LOWER_STARTY+(r-ROW_BREAK)*ROWH; }
 function sheetLayout(){
-  var qc=activeQCount(), colMax=[28,28,28,16];
+  var qc=activeQCount(), colMax=[25,25,25,25];
   var cols=[],rows=[],starts=[],done=0;
   for(var i=0;i<colMax.length;i++){
     if(done>=qc) break;
@@ -36,9 +38,12 @@ function bxy(q,c){
   var layout=sheetLayout();
   for(var col=0;col<layout.starts.length;col++){
     var start=layout.starts[col], end=start+layout.rows[col];
-    if(q>=start&&q<end) return [layout.cols[col][c], rowY(q-start)];
+    if(q>=start&&q<end){
+      var r=q-start, sy=col<2?COL12_STARTY:STARTY, rb=col<2?COL12_ROW_BREAK:ROW_BREAK;
+      return [layout.cols[col][c], r<rb?sy+r*ROWH:LOWER_STARTY+(r-rb)*ROWH];
+    }
   }
-  return [layout.cols[layout.cols.length-1][c], rowY(0)];
+  return [layout.cols[layout.cols.length-1][c], STARTY];
 }
 function idxy(d,n){ return [ID_X0+d*ID_DX,ID_Y0+n*ID_DY]; }
 
@@ -268,13 +273,17 @@ function makeSheetSVG(){
   var W=SW,H=SH,qc=activeQCount(),layout=sheetLayout();
   var s='<svg xmlns="http://www.w3.org/2000/svg" width="'+W+'" height="'+H+'" viewBox="0 0 '+W+' '+H+'">';
   s+='<rect width="'+W+'" height="'+H+'" fill="white"/>';
+  s+='<g transform="translate(25,0)">';
 
-  // Alternating row bands — spans rows used by the tallest column
-  var bandMax=Math.min(qc,28);
-  for(var r=0;r<bandMax;r++){
-    if(r%2===0) continue;
-    var bY=rowY(r);
-    s+='<rect x="56" y="'+(bY-ROWH*0.5).toFixed(2)+'" width="704" height="'+ROWH+'" fill="#f5f5f4"/>';
+  // Alternating row bands — per column group; cols 0+1 always shifted down for ID section
+  for(var ci=0;ci<layout.cols.length;ci++){
+    var sy=ci<2?COL12_STARTY:STARTY, rb=ci<2?COL12_ROW_BREAK:ROW_BREAK;
+    var cx0=Math.round(layout.cols[ci][0]-BubR-20), cx1=Math.round(layout.cols[ci][4]+BubR+8);
+    for(var r=0;r<layout.rows[ci];r++){
+      if(r%2===0) continue;
+      var bY=r<rb?sy+r*ROWH:LOWER_STARTY+(r-rb)*ROWH;
+      s+='<rect x="'+cx0+'" y="'+(bY-ROWH*0.5).toFixed(2)+'" width="'+(cx1-cx0)+'" height="'+ROWH+'" fill="#f5f5f4"/>';
+    }
   }
 
   // Fiducial markers
@@ -304,19 +313,17 @@ function makeSheetSVG(){
     });
   }
 
-  // Student ID — handwriting box above, digit labels to left, digit inside each bubble
-  var idCx=ID_X0+(ID_DIGITS-1)*ID_DX/2;
-  var wbX1=ID_X0-ID_DX/2, wbX2=ID_X0+(ID_DIGITS-0.5)*ID_DX;
-  var wbY1=ID_Y0-ID_R-42, wbY2=ID_Y0-ID_R-18;
-  s+='<text x="'+idCx+'" y="'+(wbY1-6)+'" text-anchor="middle" font-family="Arial,sans-serif" font-size="13" fill="#111">Student ID</text>';
-  s+='<rect x="'+wbX1+'" y="'+wbY1+'" width="'+(wbX2-wbX1)+'" height="'+(wbY2-wbY1)+'" fill="none" stroke="#777" stroke-width="0.8"/>';
-  for(var dv=1;dv<ID_DIGITS;dv++){
-    var dvX=ID_X0+(dv-0.5)*ID_DX;
-    s+='<line x1="'+dvX+'" y1="'+wbY1+'" x2="'+dvX+'" y2="'+wbY2+'" stroke="#777" stroke-width="0.5"/>';
-  }
+  // Student ID — vertical label on left, writing boxes on top, bubble grid below
   var idBx=ID_X0-ID_R-4, idBy=ID_Y0-ID_R-4;
   var idBw=(ID_DIGITS-1)*ID_DX+ID_R*2+8, idBh=9*ID_DY+ID_R*2+8;
-  s+='<rect x="'+idBx+'" y="'+idBy+'" width="'+idBw+'" height="'+idBh+'" fill="none" stroke="#bbb" stroke-width="0.7"/>';
+  var wbH=24, wbY1=idBy-wbH;
+  // One unified outer rectangle — writing area on top, bubble grid below
+  s+='<rect x="'+idBx+'" y="'+wbY1+'" width="'+idBw+'" height="'+(wbH+idBh)+'" fill="none" stroke="#777" stroke-width="0.8"/>';
+  s+='<line x1="'+idBx+'" y1="'+idBy+'" x2="'+(idBx+idBw)+'" y2="'+idBy+'" stroke="#777" stroke-width="0.8"/>';
+  for(var dv=1;dv<ID_DIGITS;dv++){
+    var dvX=ID_X0+(dv-0.5)*ID_DX;
+    s+='<line x1="'+dvX+'" y1="'+wbY1+'" x2="'+dvX+'" y2="'+idBy+'" stroke="#777" stroke-width="0.5"/>';
+  }
   for(var n=0;n<10;n++){
     s+='<text x="'+(idBx-4)+'" y="'+(ID_Y0+n*ID_DY+4)+'" text-anchor="end" font-family="Arial,sans-serif" font-size="9" fill="#777">'+n+'</text>';
     for(var db=0;db<ID_DIGITS;db++){
@@ -325,7 +332,10 @@ function makeSheetSVG(){
       s+='<text x="'+ip[0]+'" y="'+(ip[1]+2)+'" text-anchor="middle" font-family="Arial,sans-serif" font-size="6" fill="#bbb">'+n+'</text>';
     }
   }
+  var lblX=Math.round(idBx-20), lblY=Math.round(idBy+idBh/2);
+  s+='<text x="'+lblX+'" y="'+lblY+'" transform="rotate(-90,'+lblX+','+lblY+')" text-anchor="middle" font-family="Arial,sans-serif" font-size="12" fill="#111">Student ID</text>';
 
+  s+='</g>';
   s+='</svg>';
   return s;
 }
@@ -915,7 +925,7 @@ function refineHmatWithMarkers(initH,data,W,H,sampR,baseDst){
 
 function detectStudentId(data,W,H,Hmat,sampR){
   var chars=[], raw=[];
-  var idr=Math.max(3,sampR*0.72), ir=Math.max(2,idr*0.7);
+  var idr=Math.max(3,sampR*(ID_R/BubR)), ir=Math.max(2,idr*0.7);
   for(var d=0;d<ID_DIGITS;d++){
     var vals=[], cams10=[];
     for(var n=0;n<10;n++){var pt=idxy(d,n);cams10.push(mapPtS(Hmat,pt[0],pt[1]));}
@@ -1103,7 +1113,7 @@ function renderOverlay(srcCanvas,W,H,corners,Hmat,sampR,raw,detected){
     var chosen=S.detectedId&&S.detectedId.length===ID_DIGITS?parseInt(S.detectedId[d],10):NaN;
     for(var n=0;n<10;n++){
       var ip=idxy(d,n), icam=mapPtS(Hmat,ip[0],ip[1]);
-      ctx.beginPath(); ctx.arc(icam[0],icam[1],Math.max(3,sampR*0.72),0,Math.PI*2);
+      ctx.beginPath(); ctx.arc(icam[0],icam[1],Math.max(3,sampR*(ID_R/BubR)),0,Math.PI*2);
       if(n===chosen){
         ctx.strokeStyle='#38bdf8'; ctx.lineWidth=Math.max(1.5,sc*2.2); ctx.stroke();
         ctx.globalAlpha=0.22; ctx.fillStyle='#38bdf8'; ctx.fill(); ctx.globalAlpha=1;
@@ -1363,7 +1373,7 @@ function redrawHandles(){
     for(var d=0;d<ID_DIGITS;d++) for(var n=0;n<10;n++){
       var ip=idxy(d,n),icam=mapPtS(pH,ip[0],ip[1]);
       if(icam[0]>0&&icam[0]<lr.W&&icam[1]>0&&icam[1]<lr.H){
-        ctx.beginPath(); ctx.arc(icam[0],icam[1],Math.max(3,pr*0.72),0,Math.PI*2); ctx.stroke();
+        ctx.beginPath(); ctx.arc(icam[0],icam[1],Math.max(3,pr*(ID_R/BubR)),0,Math.PI*2); ctx.stroke();
       }
     }
     var omcam=mapPtS(pH,ORI_MARK[0],ORI_MARK[1]);
