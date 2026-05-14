@@ -1758,6 +1758,8 @@ function buildAnalytics(){
       var cls=c===key?' c':c===maxWrong&&maxN>0?' h':'';
       bars+='<div class="brow"><span class="bc">'+c+'</span><div class="btr"><div class="bfill'+cls+'" style="width:'+pct.toFixed(1)+'%"></div></div><span class="bn">'+n+'</span></div>';
     });
+    var blkPct=tot>0?blank/tot*100:0;
+    bars+='<div class="brow"><span class="bc" style="color:var(--muted)">—</span><div class="btr"><div class="bfill" style="width:'+blkPct.toFixed(1)+'%;background:var(--muted)"></div></div><span class="bn">'+blank+'</span></div>';
     var pCor=key?Math.round((cnt[key]||0)/tot*100):null;
     grid.innerHTML+='<div class="aqi"><div class="aqh"><span class="aql">Q'+(q+1)+'</span>'+(key?'<span class="aqk">Key: '+key+' · '+pCor+'% correct</span>':'<span style="color:var(--muted);font-size:11px">No key</span>')+'</div>'+bars+'</div>';
   }
