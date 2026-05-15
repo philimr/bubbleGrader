@@ -95,10 +95,10 @@ input[type=file]{display:none}
 @keyframes spin{to{transform:rotate(360deg)}}
 
 /* Answers grid — column-major: Q1→Q10 fill first column, then Q11→Q20, etc.
-   grid-template-rows is set by JS based on question count.
-   #editAnsGrid overrides width/overflow for responsive flex-style resizing. */
+   grid-template-rows is set by JS; JS ResizeObserver adjusts column count from container width.
+   #editAnsGrid uses 1fr columns (no minmax) so columns always fill width without overflow. */
 .ag{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(46px,1fr);gap:4px}
-#editAnsGrid{grid-auto-columns:1fr} /* pure 1fr: columns always fill width, never overflow */
+#editAnsGrid{grid-auto-columns:1fr}
 .ac{background:var(--surf2);border-radius:5px;padding:5px 3px;text-align:center}
 .ac .aq{font-family:monospace;font-size:9px;color:var(--muted)}
 .ac .aa{font-family:monospace;font-size:13px;font-weight:500;color:var(--txt)}
