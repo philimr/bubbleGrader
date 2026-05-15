@@ -56,6 +56,8 @@ const S={ key:new Array(MAXQ).fill(null), qCount:50, students:[], roster:{}, str
           rosterMatchIdx:0 };
 const STORE_KEY='bubbleGrader.v1';
 var adjDragging=-1;
+var _editIdx=-1;
+var _editMatchIdx=0;
 var cropState={active:false,dragging:false,startX:0,startY:0,x:0,y:0,w:0,h:0};
 var perspState={active:false,handles:null,dragging:-1};
 var previewReq=0;
@@ -1180,12 +1182,39 @@ function showScore(det){
     var cls=''; if(a===null) cls='blk'; else if(a==='?') cls='mul'; else if(k) cls=a===k?'cor':'wrg';
     var div=document.createElement('div'); div.className='ac '+cls;
     div.title='Q'+(q+1)+(k?' · Key:'+k:'');
-    div.innerHTML='<div class="aq">'+(q+1)+'</div><div class="aa">'+(a===null?'—':a)+'</div>';
+    var opts='<option value=""'+(a===null?' selected':'')+'>—</option>';
+    CH.forEach(function(ch){ opts+='<option value="'+ch+'"'+(a===ch?' selected':'')+'>'+ch+'</option>'; });
+    div.innerHTML='<div class="aq">'+(q+1)+'</div><select class="ans-sel" data-q="'+q+'" onchange="onAnsSelChange(this)">'+opts+'</select>';
     ag.appendChild(div);
   }
   document.getElementById('scanResult').style.display='';
   setAlert('ok','Scan complete — review the answers, then save or rescan.');
   setSaveButtons(false,'✓ Save & Next Student');
+}
+
+function onAnsSelChange(sel){
+  var q=parseInt(sel.dataset.q);
+  var val=sel.value||null;
+  if(S.detected) S.detected[q]=val;
+  var k=S.key[q];
+  var cls=''; if(!val) cls='blk'; else if(k) cls=val===k?'cor':'wrg';
+  sel.parentElement.className='ac '+cls;
+  updateScanScore();
+}
+
+function updateScanScore(){
+  if(!S.detected) return;
+  var qc=activeQCount();
+  var det=normalizeAnswers(S.detected,qc);
+  var r=scoreOf(det,qc);
+  var pass=parseInt(document.getElementById('passPct').value)||70;
+  var passed=r.pct>=pass;
+  var sb=document.getElementById('scoreBig');
+  if(r.noKey){
+    sb.innerHTML='<div class="scnum">—<sub>/'+qc+'</sub></div><div class="scpct">No answer key set</div><span class="sctag tnone">SET KEY FIRST</span>';
+  } else {
+    sb.innerHTML='<div class="scnum">'+r.correct+'<sub>/'+r.total+'</sub></div><div class="scpct">'+r.pct+'%</div><span class="sctag '+(passed?'tpass':'tfail')+'">'+(passed?'✓ PASS':'✗ FAIL')+'</span>';
+  }
 }
 
 function nextRosterMatch(){
@@ -1746,13 +1775,124 @@ function buildResults(){
     tr+='<td>'+(s.studentId?esc(s.studentId):'—')+'</td>';
     tr+='<td>'+s.correct+'/'+s.total+'</td><td>'+s.pct+'%</td>';
     tr+='<td><span class="bdg '+(ok?'bp':'bf')+'">'+(ok?'PASS':'FAIL')+'</span></td>';
-    tr+='<td><button class="btn sm" onclick="delStu('+origIdx+')">✕</button></td></tr>';
+    tr+='<td style="white-space:nowrap"><button class="btn sm" onclick="openEditInfo('+origIdx+')" title="Edit student info">Info</button> <button class="btn sm" onclick="openEditAnswers('+origIdx+')" title="Edit answers">Ans</button> <button class="btn sm" onclick="delStu('+origIdx+')">✕</button></td></tr>';
     tbody.innerHTML+=tr;
   });
   buildAnalytics();
 }
 function sc(l,v){ return '<div class="scard"><div class="slbl">'+l+'</div><div class="sval">'+v+'</div></div>'; }
 function delStu(i){ S.students.splice(i,1); saveData(); updateHeader(); buildResults(); }
+
+// ── Edit modal ──
+function openEditInfo(origIdx){
+  var s=S.students[origIdx];
+  if(!s) return;
+  _editIdx=origIdx;
+  _editMatchIdx=0;
+  var parts=s.name&&s.name.indexOf(', ')>=0?s.name.split(', '):['',''];
+  document.getElementById('editLast').value=parts[0]||'';
+  document.getElementById('editFirst').value=parts.slice(1).join(', ')||'';
+  document.getElementById('editStudentId').value=s.studentId||'';
+  document.getElementById('editClassName').value=s.className||'';
+  document.getElementById('editPeriod').value=s.period||'';
+  var matches=rosterGetAll(s.studentId||'');
+  // Find which roster entry matches the currently saved class/period so the
+  // cycle button always advances to a genuinely different entry on first press.
+  _editMatchIdx=0;
+  for(var mi=0;mi<matches.length;mi++){
+    if((matches[mi].cls||'')===(s.className||'')&&(matches[mi].period||'')===(s.period||'')){
+      _editMatchIdx=mi; break;
+    }
+  }
+  var nmBtn=document.getElementById('btnEditNextMatch');
+  if(nmBtn) nmBtn.style.display=matches.length>1?'':'none';
+  document.getElementById('editModalTitle').textContent='Edit Student Info';
+  document.getElementById('editInfoPanel').style.display='';
+  document.getElementById('editAnswersPanel').style.display='none';
+  document.getElementById('editModal').style.display='';
+}
+
+function nextEditMatch(){
+  var s=S.students[_editIdx];
+  if(!s) return;
+  var matches=rosterGetAll(s.studentId||'');
+  if(matches.length<2) return;
+  _editMatchIdx=(_editMatchIdx+1)%matches.length;
+  var r=matches[_editMatchIdx];
+  document.getElementById('editLast').value=r.last||'';
+  document.getElementById('editFirst').value=r.first||'';
+  document.getElementById('editClassName').value=r.cls||'';
+  document.getElementById('editPeriod').value=r.period||'';
+}
+
+function openEditAnswers(origIdx){
+  var s=S.students[origIdx];
+  if(!s) return;
+  _editIdx=origIdx;
+  document.getElementById('editModalTitle').textContent='Edit Answers — '+esc(s.name);
+  document.getElementById('editInfoPanel').style.display='none';
+  document.getElementById('editAnswersPanel').style.display='';
+  document.getElementById('editModal').style.display='';
+  renderEditAnsGrid(normalizeAnswers(s.answers,activeQCount()));
+}
+
+function renderEditAnsGrid(answers){
+  var ag=document.getElementById('editAnsGrid');
+  ag.innerHTML='';
+  var qc=activeQCount();
+  for(var q=0;q<qc;q++){
+    var a=answers[q], k=S.key[q];
+    var cls=''; if(!a) cls='blk'; else if(k) cls=a===k?'cor':'wrg';
+    var div=document.createElement('div'); div.className='ac '+cls;
+    div.title='Q'+(q+1)+(k?' · Key:'+k:'');
+    var opts='<option value=""'+(a===null?' selected':'')+'>—</option>';
+    CH.forEach(function(ch){ opts+='<option value="'+ch+'"'+(a===ch?' selected':'')+'>'+ch+'</option>'; });
+    div.innerHTML='<div class="aq">'+(q+1)+'</div><select class="ans-sel" data-q="'+q+'" onchange="onEditAnsChange(this)">'+opts+'</select>';
+    ag.appendChild(div);
+  }
+}
+
+function onEditAnsChange(sel){
+  var val=sel.value||null;
+  var k=S.key[parseInt(sel.dataset.q)];
+  var cls=''; if(!val) cls='blk'; else if(k) cls=val===k?'cor':'wrg';
+  sel.parentElement.className='ac '+cls;
+}
+
+function saveEditInfo(){
+  var s=S.students[_editIdx];
+  if(!s) return;
+  var last=document.getElementById('editLast').value.trim();
+  var first=document.getElementById('editFirst').value.trim();
+  s.name=last+(first?(last?', ':'')+first:'')|| s.name;
+  s.studentId=document.getElementById('editStudentId').value.trim();
+  s.className=document.getElementById('editClassName').value.trim();
+  s.period=document.getElementById('editPeriod').value.trim();
+  saveData(); updateHeader(); buildResults();
+  closeEditModal();
+}
+
+function saveEditAnswers(){
+  var s=S.students[_editIdx];
+  if(!s) return;
+  var sels=document.querySelectorAll('#editAnsGrid .ans-sel');
+  var answers=blankAnswers();
+  sels.forEach(function(sel){ answers[parseInt(sel.dataset.q)]=sel.value||null; });
+  s.answers=answers;
+  var r=scoreOf(answers);
+  s.correct=r.correct; s.total=r.total; s.pct=r.pct;
+  saveData(); updateHeader(); buildResults();
+  closeEditModal();
+}
+
+function closeEditModal(){
+  document.getElementById('editModal').style.display='none';
+  _editIdx=-1;
+}
+
+function closeEditModalOnBg(e){
+  if(e.target===document.getElementById('editModal')) closeEditModal();
+}
 
 function buildAnalytics(){
   var grid=document.getElementById('aqGrid'); grid.innerHTML='';
