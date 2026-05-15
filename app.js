@@ -678,19 +678,65 @@ function findPageBounds(data,W,H){
          x1:Math.min(W,xMax+mx),y1:Math.min(H,yMax+my)};
 }
 
+function findPaperQuad(data,W,H,pg){
+  // Find the white paper boundary as a quadrilateral by locating the most extreme
+  // bright pixel in each diagonal direction within the page bounding box.
+  // Sampled at 1/4 resolution (step=4) for speed.
+  // Returns [camTL,camTR,camBL,camBR] or null.
+  var step=4,thresh=160;
+  var tlS=Infinity,trS=Infinity,blS=Infinity,brS=Infinity;
+  var tlPt=null,trPt=null,blPt=null,brPt=null;
+  for(var y=pg.y0;y<pg.y1;y+=step){
+    for(var x=pg.x0;x<pg.x1;x+=step){
+      if(gpx(data,(y*W+x)*4)<thresh) continue;
+      var s;
+      s=x+y;  if(s<tlS){tlS=s;tlPt=[x,y];}
+      s=-x+y; if(s<trS){trS=s;trPt=[x,y];}
+      s=x-y;  if(s<blS){blS=s;blPt=[x,y];}
+      s=-x-y; if(s<brS){brS=s;brPt=[x,y];}
+    }
+  }
+  if(!tlPt||!trPt||!blPt||!brPt) return null;
+  if(tlPt[0]>=trPt[0]||blPt[0]>=brPt[0]||tlPt[1]>=blPt[1]||trPt[1]>=brPt[1]) return null;
+  var cw=(trPt[0]-tlPt[0]+brPt[0]-blPt[0])/2,ch=(blPt[1]-tlPt[1]+brPt[1]-trPt[1])/2;
+  if(cw<W*0.15||ch<H*0.15||cw/ch<0.25||cw/ch>4.0) return null;
+  return [tlPt,trPt,blPt,brPt];
+}
+
 function detectCorners(data,W,H){
   var pg=findPageBounds(data,W,H);
-  var pw=pg.x1-pg.x0, ph=pg.y1-pg.y0;
+  // Primary: locate the bright paper trapezoid, then search for dark corner markers
+  // in tight windows near each paper corner. Much more precise for tilted/phone photos
+  // than the axis-aligned quadrant search because the search is anchored to the actual
+  // (potentially angled) paper corner rather than the bounding-box corner.
+  var quad=findPaperQuad(data,W,H,pg);
+  if(quad){
+    var cw=(quad[1][0]-quad[0][0]+quad[3][0]-quad[2][0])/2;
+    var ch=(quad[2][1]-quad[0][1]+quad[3][1]-quad[1][1])/2;
+    // r = 28% of shortest dimension. The farthest fiducial (BR/TR) is ~24% of paper
+    // width inset from its paper corner, so 28% always covers all four markers.
+    var r=Math.max(40,Math.round(Math.min(cw,ch)*0.28));
+    var TL=findMarkerNear(data,W,H,quad[0][0],quad[0][1],r);
+    var TR=findMarkerNear(data,W,H,quad[1][0],quad[1][1],r);
+    var BL=findMarkerNear(data,W,H,quad[2][0],quad[2][1],r);
+    var BR=findMarkerNear(data,W,H,quad[3][0],quad[3][1],r);
+    if(TL&&TR&&BL&&BR&&TL[0]<TR[0]&&BL[0]<BR[0]&&TL[1]<BL[1]&&TR[1]<BR[1]){
+      var fw=(TR[0]-TL[0]+BR[0]-BL[0])/2,fh=(BL[1]-TL[1]+BR[1]-TR[1])/2;
+      if(fw/fh>=0.3&&fw/fh<=2.0) return [TL,TR,BL,BR];
+    }
+  }
+  // Fallback: axis-aligned page bounds + quadrant blob search
+  var pw=pg.x1-pg.x0,ph=pg.y1-pg.y0;
   var qx=Math.floor(pw*0.32),qy=Math.floor(ph*0.32);
-  var TL=findMarkerBlob(data,W,pg.x0,pg.y0,pg.x0+qx,pg.y0+qy);
-  var TR=findMarkerBlob(data,W,pg.x1-qx,pg.y0,pg.x1,pg.y0+qy);
-  var BL=findMarkerBlob(data,W,pg.x0,pg.y1-qy,pg.x0+qx,pg.y1);
-  var BR=findMarkerBlob(data,W,pg.x1-qx,pg.y1-qy,pg.x1,pg.y1);
-  if(!TL||!TR||!BL||!BR) return null;
-  if(TL[0]>=TR[0]||BL[0]>=BR[0]||TL[1]>=BL[1]||TR[1]>=BR[1]) return null;
-  var cw=(TR[0]-TL[0]+BR[0]-BL[0])/2, ch=(BL[1]-TL[1]+BR[1]-TR[1])/2;
-  if(cw/ch<0.3||cw/ch>2.0) return null;
-  return [TL,TR,BL,BR];
+  var TL2=findMarkerBlob(data,W,pg.x0,pg.y0,pg.x0+qx,pg.y0+qy);
+  var TR2=findMarkerBlob(data,W,pg.x1-qx,pg.y0,pg.x1,pg.y0+qy);
+  var BL2=findMarkerBlob(data,W,pg.x0,pg.y1-qy,pg.x0+qx,pg.y1);
+  var BR2=findMarkerBlob(data,W,pg.x1-qx,pg.y1-qy,pg.x1,pg.y1);
+  if(!TL2||!TR2||!BL2||!BR2) return null;
+  if(TL2[0]>=TR2[0]||BL2[0]>=BR2[0]||TL2[1]>=BL2[1]||TR2[1]>=BR2[1]) return null;
+  var cw2=(TR2[0]-TL2[0]+BR2[0]-BL2[0])/2,ch2=(BL2[1]-TL2[1]+BR2[1]-TR2[1])/2;
+  if(cw2/ch2<0.3||cw2/ch2>2.0) return null;
+  return [TL2,TR2,BL2,BR2];
 }
 
 function findMarkerNear(data,W,H,cx,cy,r){
