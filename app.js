@@ -281,6 +281,13 @@ function makeSheetSVG(){
   s+='<rect width="'+W+'" height="'+H+'" fill="white"/>';
   s+='<g transform="translate(25,0)">';
 
+   // Alignment guide lines: endpoints stop exactly at marker centres
+  s+='<line x1="88"  y1="84"  x2="660" y2="84"  stroke="#aaa" stroke-width="0.6"/>'; // top (TL→TR)
+  s+='<line x1="88"  y1="486" x2="660" y2="486" stroke="#aaa" stroke-width="0.6"/>'; // mid (ML→MR)
+  s+='<line x1="88"  y1="942" x2="660" y2="942" stroke="#aaa" stroke-width="0.6"/>'; // bottom (BL→BR)
+  s+='<line x1="88"  y1="84"  x2="88"  y2="942" stroke="#aaa" stroke-width="0.6"/>'; // left (TL→BL)
+  s+='<line x1="660" y1="84"  x2="660" y2="942" stroke="#aaa" stroke-width="0.6"/>'; // right (TR→BR)
+
   // Alternating row bands — per column group; cols 0+1 always shifted down for ID section
   for(var ci=0;ci<layout.cols.length;ci++){
     var sy=ci<2?COL12_STARTY:STARTY, rb=ci<2?COL12_ROW_BREAK:ROW_BREAK;
@@ -297,13 +304,7 @@ function makeSheetSVG(){
     s+='<rect x="'+(m.pt[0]-m.size/2)+'" y="'+(m.pt[1]-m.size/2)+'" width="'+m.size+'" height="'+m.size+'" fill="black"/>';
   });
 
-  // Alignment guide lines: endpoints stop exactly at marker centres
-  s+='<line x1="88"  y1="84"  x2="660" y2="84"  stroke="#ccc" stroke-width="0.6"/>'; // top (TL→TR)
-  s+='<line x1="88"  y1="486" x2="660" y2="486" stroke="#ccc" stroke-width="0.6"/>'; // mid (ML→MR)
-  s+='<line x1="88"  y1="942" x2="660" y2="942" stroke="#ccc" stroke-width="0.6"/>'; // bottom (BL→BR)
-  s+='<line x1="88"  y1="84"  x2="88"  y2="942" stroke="#ccc" stroke-width="0.6"/>'; // left (TL→BL)
-  s+='<line x1="660" y1="84"  x2="660" y2="942" stroke="#ccc" stroke-width="0.6"/>'; // right (TR→BR)
-
+ 
   // Header — Name box + Period box
   s+='<text x="72" y="55" font-family="Arial,sans-serif" font-size="13" fill="#111">Name</text>';
   s+='<rect x="116" y="35" width="350" height="30" fill="none" stroke="#111" stroke-width="1.2"/>';
