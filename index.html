@@ -17,7 +17,7 @@
     <button class="nb" data-tab="results">Results</button>
   </nav>
   <div class="hstats">
-    <span>Class: <b id="hClass">—</b></span>
+    <span style="display:none;">Class: <b id="hClass">—</b></span>
     <span>Graded: <b id="hGraded">0</b></span>
     <span>Avg: <b id="hAvg">—</b></span>
   </div>
@@ -25,37 +25,42 @@
 
 <!-- SETUP -->
 <div class="tab on" id="tab-setup">
+  <input type="hidden" id="className">
   <div class="card">
     <div class="ch">
-      <div class="ct">Class Info</div>
+      <div class="ct">Student Roster</div>
       <div class="row">
-        <button class="btn sm" onclick="clearResultsOnly()">Clear results</button>
-        <button class="btn sm" onclick="clearKeyAndResults()">Clear key + results</button>
+        <button class="btn sm" onclick="downloadRosterTemplate()">↓ Sample Template</button>
+        <label class="btn sm" for="rosterFile">↑ Upload Roster CSV</label>
+        <input type="file" id="rosterFile" accept=".csv" style="display:none" onchange="importRosterCSV(event)">
+        <button class="btn sm" id="rosterDownloadBtn" onclick="downloadRosterCSV()" style="display:none">↓ Download Roster CSV</button>
+        <button class="btn sm" id="rosterClearBtn" onclick="clearRoster()" style="display:none">✕ Clear Roster</button>
       </div>
     </div>
-    <div class="fr">
-      <div class="fg">
-        <label class="fl">Class / Course Name</label>
-        <input type="text" id="className" placeholder="e.g. Biology 101 – Period 3">
-      </div>
-      <div class="fg" style="max-width:155px">
-        <label class="fl">Passing Score %</label>
-        <input type="number" id="passPct" value="60" min="1" max="100">
-      </div>
+    <p class="hint" id="rosterNoData">No roster loaded — upload a CSV with StudentID, Last, First (and optionally Class, Section, Period) to map bubble IDs to student names.</p>
+    <button class="btn sm" id="rosterStatus" onclick="toggleRosterTable()" style="display:none;margin-bottom:2px"></button>
+    <div id="rosterTableWrap" class="tbl-wrap" style="display:none;max-height:320px;overflow-y:auto;margin-top:8px">
+      <table class="rt" id="rosterTable"></table>
     </div>
   </div>
   <div class="card">
     <div class="ch">
       <div class="ct" id="keyTitle">Answer Key — 50 Questions (A–E)</div>
       <div class="row">
-        <label class="fl" style="margin:0">Questions</label>
-        <input type="number" id="qCount" min="1" max="100" value="50" style="width:65px" onchange="setQuestionCount(parseInt(this.value)||50)">
-        <button class="btn sm" onclick="randomKey()">Random fill</button>
-        <button class="btn sm" onclick="clearKey()">Clear all</button>
-        <button class="btn sm" onclick="exportKeyCSV()">↓ Export CSV</button>
-        <label for="keyFile" class="btn sm" style="cursor:pointer">↑ Import CSV</label>
-        <input type="file" id="keyFile" accept=".csv,text/csv" onchange="importKeyCSV(event)" style="display:none">
+        <button class="btn sm" onclick="clearResultsOnly()">Clear results</button>
+        <button class="btn sm" onclick="clearKeyAndResults()">Clear key + results</button>
       </div>
+    </div>
+    <div class="row" style="margin-bottom:10px">
+      <label class="fl" style="margin:0">Questions</label>
+      <input type="number" id="qCount" min="1" max="100" value="50" style="width:65px" onchange="setQuestionCount(parseInt(this.value)||50)">
+      <label class="fl" style="margin:0">Passing %</label>
+      <input type="number" id="passPct" value="60" min="1" max="100" style="width:65px">
+      <button class="btn sm" onclick="randomKey()" style="display:none">Random fill</button>
+      <button class="btn sm" onclick="clearKey()">Clear all</button>
+      <button class="btn sm" onclick="exportKeyCSV()">↓ Export Answer Key CSV</button>
+      <label for="keyFile" class="btn sm" style="cursor:pointer">↑ Import Answer Key CSV</label>
+      <input type="file" id="keyFile" accept=".csv,text/csv" onchange="importKeyCSV(event)" style="display:none">
     </div>
     <p class="hint">Click the correct answer letter for each question. Leave blank to skip scoring that question.</p>
     <div class="kg" id="keyGrid"></div>
@@ -86,19 +91,19 @@
     <div class="fr">
       <div class="fg" style="flex:1">
         <label class="fl">Last Name</label>
-        <input type="text" id="stuLast" placeholder="Auto-filled from roster">
+        <input type="text" id="stuLast" placeholder="">
       </div>
       <div class="fg" style="flex:1">
         <label class="fl">First Name</label>
-        <input type="text" id="stuFirst" placeholder="Auto-filled from roster">
+        <input type="text" id="stuFirst" placeholder="">
       </div>
       <div class="fg" style="flex:0 0 150px">
         <label class="fl">Student ID <span id="stuIdStatus" style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--muted)"></span></label>
-        <input type="text" id="stuIdField" placeholder="auto-detected" maxlength="8" style="font-family:monospace;letter-spacing:.08em">
+        <input type="text" id="stuIdField" placeholder="" maxlength="8" style="font-family:monospace;letter-spacing:.08em">
       </div>
       <div class="fg" style="flex:1; position: relative;">
         <label class="fl">Class Name <button id="btnNextMatch" class="btn sm" style="position: absolute; right:0px; top: 0px;display:none; font-size:8px; padding: 2px 3px;background-color: lightgray;" onclick="nextRosterMatch()">↻ Next Match</button></label>
-        <input type="text" id="scanClassName" placeholder="e.g. Biology 101">
+        <input type="text" id="scanClassName" placeholder="e.g. Algebra I">
       </div>
       <div class="fg" style="flex:0 0 100px">
         <label class="fl">Period</label>
@@ -119,20 +124,20 @@
   <div id="scanAlert"></div>
 
   <div class="methods">
-    <div class="method on" id="mUpload" onclick="setMethod('upload')">
-      <div class="mi">🖼</div>
-      <div class="mt">Upload Photo</div>
-      <div class="md">Take a photo on your phone, then upload it here — works everywhere</div>
-    </div>
-    <div class="method" id="mCamera" onclick="setMethod('camera')">
+    <div class="method on" id="mCamera" onclick="setMethod('camera')">
       <div class="mi">📷</div>
       <div class="mt">Live Camera</div>
       <div class="md">Use your webcam in real time — requires HTTPS or localhost</div>
     </div>
+    <div class="method" id="mUpload" onclick="setMethod('upload')">
+      <div class="mi">🖼</div>
+      <div class="mt">Upload Photo</div>
+      <div class="md">Take a photo on your phone, then upload it here — works everywhere</div>
+    </div>
   </div>
 
   <!-- Upload panel -->
-  <div class="card" id="uploadPanel">
+  <div class="card" id="uploadPanel" style="display:none">
     <div class="ch"><div class="ct">Upload Sheet Photo</div></div>
     <p class="hint">Photograph the completed sheet so all inset marker squares are visible and the paper lies flat. Then choose the photo below.</p>
     <div class="row">
@@ -143,7 +148,7 @@
   </div>
 
   <!-- Camera panel -->
-  <div class="card" id="cameraPanel" style="display:none">
+  <div class="card" id="cameraPanel">
     <div class="ch">
       <div class="ct">Live Camera</div>
       <div class="row">
@@ -227,17 +232,6 @@
     </div>
     <p class="hint">Clear results to reuse the current answer key for a new class. Clear key + results to start from scratch.</p>
   </div>
-  <div class="card">
-    <div class="ch">
-      <div class="ct">Student Roster</div>
-      <div class="row">
-        <label class="btn sm" for="rosterFile">↑ Upload Roster CSV</label>
-        <input type="file" id="rosterFile" accept=".csv" style="display:none" onchange="importRosterCSV(event)">
-        <button class="btn sm" id="rosterClearBtn" onclick="clearRoster()" style="display:none">✕ Clear Roster</button>
-      </div>
-    </div>
-    <p class="hint" id="rosterStatus">No roster loaded — upload a CSV with StudentID, Last, First (and optionally Class, Section, Period) to map bubble IDs to student names.</p>
-  </div>
   <div id="noRes" class="card" style="text-align:center;color:var(--muted);padding:44px">
     No students graded yet. Use the <strong>Scan</strong> tab to grade sheets.
   </div>
@@ -251,7 +245,7 @@
       </div>
       <div class="tbl-wrap">
         <table class="rt">
-          <thead id="resHead"><tr><th>#</th><th>Student</th><th>ID</th><th>Score</th><th>%</th><th>Status</th><th></th></tr></thead>
+          <thead id="resHead"><tr><th>#</th><th>Student</th><th>ID</th><th>Score</th><th>%</th><th>Status</th><th>Edit / Remove</th></tr></thead>
           <tbody id="resBody"></tbody>
         </table>
       </div>
@@ -300,6 +294,24 @@
       <div class="row" style="justify-content:flex-end;margin-top:14px">
         <button class="btn sm" onclick="closeEditModal()">Cancel</button>
         <button class="btn ga" onclick="saveEditAnswers()">✓ Save</button>
+      </div>
+    </div>
+
+    <!-- Roster entry panel -->
+    <div id="editRosterPanel" style="display:none">
+      <div class="fr">
+        <div class="fg"><label class="fl">Last Name</label><input type="text" id="editRosterLast"></div>
+        <div class="fg"><label class="fl">First Name</label><input type="text" id="editRosterFirst"></div>
+      </div>
+      <div class="fr">
+        <div class="fg" style="flex:0 0 155px"><label class="fl">Student ID</label><input type="text" id="editRosterIdDisplay" maxlength="8" style="font-family:monospace;letter-spacing:.08em"></div>
+        <div class="fg"><label class="fl">Class</label><input type="text" id="editRosterClass"></div>
+        <div class="fg"><label class="fl">Section</label><input type="text" id="editRosterSection"></div>
+        <div class="fg" style="flex:0 0 100px"><label class="fl">Period</label><input type="text" id="editRosterPeriod"></div>
+      </div>
+      <div class="row" style="justify-content:flex-end;margin-top:14px">
+        <button class="btn sm" onclick="closeEditModal()">Cancel</button>
+        <button class="btn ga" onclick="saveEditRoster()">✓ Save</button>
       </div>
     </div>
   </div>
