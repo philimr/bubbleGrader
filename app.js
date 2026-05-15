@@ -934,7 +934,7 @@ function refineSplitH(splitH,data,W,H,sampR,camCorners,camMidPts){
 function refineHmatWithMarkers(initH,data,W,H,sampR,baseDst){
   var srcPts=[TC.TL,TC.TR,TC.BL,TC.BR], dstPts=[];
   for(var i=0;i<srcPts.length;i++) dstPts.push(baseDst&&baseDst[i]?baseDst[i]:mapPt(initH,srcPts[i][0],srcPts[i][1]));
-  var searchR=Math.max(24,Math.round(sampR*5.0));
+  var searchR=Math.max(32,Math.round(sampR*7.0));
   // Only search for small markers — large corner markers are already seeded above and
   // their blob footprint exceeds the size threshold in findMarkerBlob.
   FID_MARKERS.forEach(function(m){
@@ -1014,8 +1014,9 @@ function processImage(imgData,W,imgH,srcCanvas,allowAutoUpright){
     // Primary: look for an actual dark square blob near the predicted position
     var oriBlob=findMarkerNear(data,W,imgH,omCam[0],omCam[1],oriSearchR);
     if(oriBlob){Hmat=tryH;selectedOi=oi;break;}
-    // Secondary: fall back to average darkness for tie-breaking when blob detection fails
-    var omDark=darkAt(data,W,imgH,omCam[0],omCam[1],sampR);
+    // Secondary: fall back to background-subtracted fill score (fillAt) so shadows
+    // on phone photos don't fool the tie-breaker the way raw darkAt can.
+    var omDark=fillAt(data,W,imgH,omCam[0],omCam[1],sampR);
     if(omDark>bestOmDark){bestOmDark=omDark;bestH=tryH;bestOi=oi;}
   }
   // If no orientation found a blob, use the one whose mark was darkest rather than
@@ -1044,7 +1045,7 @@ function processImage(imgData,W,imgH,srcCanvas,allowAutoUpright){
   // Build split homography using mid-row markers (ML/MR at y=MID_Y).
   // Two independent 4-point transforms — one for each half — correct non-linear
   // page curl / keystoning that a single homography cannot fix.
-  var searchR2=Math.max(24,Math.round(sampR*5.0));
+  var searchR2=Math.max(40,Math.round(sampR*8.0));
   var mlEst=mapPt(Hmat,88,MID_Y),mrEst=mapPt(Hmat,660,MID_Y);
   var mlCam=findMarkerNear(data,W,imgH,mlEst[0],mlEst[1],searchR2);
   var mrCam=findMarkerNear(data,W,imgH,mrEst[0],mrEst[1],searchR2);
@@ -1061,6 +1062,7 @@ function processImage(imgData,W,imgH,srcCanvas,allowAutoUpright){
   }
   S.detectedMidPts=(mlCam&&mrCam)?[mlCam,mrCam]:null;
   var splitH=S.detectedMidPts?buildSplitH(corners,S.detectedMidPts):null;
+  if(splitH) splitH=refineSplitH(splitH,data,W,imgH,sampR,corners,S.detectedMidPts);
   if(splitH) splitH=refineSplitH(splitH,data,W,imgH,sampR,corners,S.detectedMidPts);
   var activeH=splitH||Hmat;
 
