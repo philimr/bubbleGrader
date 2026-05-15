@@ -17,12 +17,13 @@ const BUB_X_100=[
   [414,436,457,479,501],
   [549,571,593,615,637]
 ];
-const STARTY=112, LOWER_STARTY=514, ROWH=23, ROW_BREAK=16, MID_Y=486;
-// Cols 0+1 start 9 rows lower to make room for the ID section at top-left
-const COL12_STARTY=STARTY+9*ROWH, COL12_ROW_BREAK=7;
+const STARTY=112, LOWER_STARTY=514, ROWH=23, MID_Y=486;
+// All question columns start 9 rows below the header to clear the Student ID section;
+// the top-right area (above Q_STARTY in cols 2-3) is intentionally left open for future features.
+const Q_STARTY=STARTY+9*ROWH, Q_ROW_BREAK=7;
 const ID_DIGITS=8, ID_X0=170, ID_DX=23, ID_Y0=120, ID_DY=18, ID_R=6.5;
 const ORI_MARK=[88,750];
-function rowY(r){ return r<ROW_BREAK?STARTY+r*ROWH:LOWER_STARTY+(r-ROW_BREAK)*ROWH; }
+function rowY(r){ return r<Q_ROW_BREAK?Q_STARTY+r*ROWH:LOWER_STARTY+(r-Q_ROW_BREAK)*ROWH; }
 function sheetLayout(){
   var qc=activeQCount(), colMax=[25,25,25,25];
   var cols=[],rows=[],starts=[],done=0;
@@ -39,8 +40,8 @@ function bxy(q,c){
   for(var col=0;col<layout.starts.length;col++){
     var start=layout.starts[col], end=start+layout.rows[col];
     if(q>=start&&q<end){
-      var r=q-start, sy=col<2?COL12_STARTY:STARTY, rb=col<2?COL12_ROW_BREAK:ROW_BREAK;
-      return [layout.cols[col][c], r<rb?sy+r*ROWH:LOWER_STARTY+(r-rb)*ROWH];
+      var r=q-start;
+      return [layout.cols[col][c], r<Q_ROW_BREAK?Q_STARTY+r*ROWH:LOWER_STARTY+(r-Q_ROW_BREAK)*ROWH];
     }
   }
   return [layout.cols[layout.cols.length-1][c], STARTY];
@@ -62,6 +63,7 @@ var _editRosterId='';
 var _editRosterEntryIdx=0;
 var _rosterSortCol=null;
 var _rosterSortDir=0; // 0=default(last/first), 1=asc, 2=desc
+var _ansGridResizeObserver=null;
 var cropState={active:false,dragging:false,startX:0,startY:0,x:0,y:0,w:0,h:0};
 var perspState={active:false,handles:null,dragging:-1};
 var previewReq=0;
@@ -288,13 +290,12 @@ function makeSheetSVG(){
   s+='<line x1="88"  y1="84"  x2="88"  y2="942" stroke="#aaa" stroke-width="0.6"/>'; // left (TL→BL)
   s+='<line x1="660" y1="84"  x2="660" y2="942" stroke="#aaa" stroke-width="0.6"/>'; // right (TR→BR)
 
-  // Alternating row bands — per column group; cols 0+1 always shifted down for ID section
+  // Alternating row bands — all columns start at Q_STARTY
   for(var ci=0;ci<layout.cols.length;ci++){
-    var sy=ci<2?COL12_STARTY:STARTY, rb=ci<2?COL12_ROW_BREAK:ROW_BREAK;
     var cx0=Math.round(layout.cols[ci][0]-BubR-20), cx1=Math.round(layout.cols[ci][4]+BubR+8);
     for(var r=0;r<layout.rows[ci];r++){
       if(r%2===0) continue;
-      var bY=r<rb?sy+r*ROWH:LOWER_STARTY+(r-rb)*ROWH;
+      var bY=r<Q_ROW_BREAK?Q_STARTY+r*ROWH:LOWER_STARTY+(r-Q_ROW_BREAK)*ROWH;
       s+='<rect x="'+cx0+'" y="'+(bY-ROWH*0.5).toFixed(2)+'" width="'+(cx1-cx0)+'" height="'+ROWH+'" fill="#f5f5f4"/>';
     }
   }
@@ -305,11 +306,22 @@ function makeSheetSVG(){
   });
 
  
-  // Header — Name box + Period box
-  s+='<text x="72" y="55" font-family="Arial,sans-serif" font-size="13" fill="#111">Name</text>';
-  s+='<rect x="116" y="35" width="350" height="30" fill="none" stroke="#111" stroke-width="1.2"/>';
-  s+='<text x="478" y="55" font-family="Arial,sans-serif" font-size="13" fill="#111">Period</text>';
-  s+='<rect x="528" y="35" width="145" height="30" fill="none" stroke="#111" stroke-width="1.2"/>';
+  // Header — Name / Date / Period as label + underline on one row
+  var hy=57, hl=60; // text baseline y, underline y
+  s+='<text x="74" y="'+hy+'" font-family="Arial,sans-serif" font-size="13" fill="#111">Name:</text>';
+  s+='<line x1="113" y1="'+hl+'" x2="405" y2="'+hl+'" stroke="#111" stroke-width="0.9"/>';
+  s+='<text x="420" y="'+hy+'" font-family="Arial,sans-serif" font-size="13" fill="#111">Date:</text>';
+  s+='<line x1="454" y1="'+hl+'" x2="570" y2="'+hl+'" stroke="#111" stroke-width="0.9"/>';
+  s+='<text x="580" y="'+hy+'" font-family="Arial,sans-serif" font-size="13" fill="#111">Period:</text>';
+  s+='<line x1="625" y1="'+hl+'" x2="673" y2="'+hl+'" stroke="#111" stroke-width="0.9"/>';
+
+  // A–E column headers — one set above each active question column group
+  var hdrY=Q_STARTY-14;
+  layout.cols.forEach(function(xs){
+    xs.forEach(function(bx,bi){
+      s+='<text x="'+bx+'" y="'+hdrY+'" text-anchor="middle" font-family="Arial,sans-serif" font-size="8.5" font-weight="bold" fill="#555">'+CH[bi]+'</text>';
+    });
+  });
 
   // Question bubbles — letters A–E inside each circle, number label to left
   for(var q=0;q<qc;q++){
@@ -1186,6 +1198,7 @@ function showScore(det){
   if(nmBtn) nmBtn.style.display=allMatches.length>1?'':'none';
   var ag=document.getElementById('ansGrid');
   ag.innerHTML='';
+  ag.style.gridTemplateRows='repeat(10,auto)';
   for(var q=0;q<displayCount;q++){
     var a=displayAnswers[q],k=S.key[q];
     var cls=''; if(a===null) cls='blk'; else if(a==='?') cls='mul'; else if(k) cls=a===k?'cor':'wrg';
@@ -1969,9 +1982,20 @@ function openEditAnswers(origIdx){
   renderEditAnsGrid(normalizeAnswers(s.answers,activeQCount()));
 }
 
+function updateEditAnsGridHeight(){
+  var box=document.querySelector('#editModal .modal-box');
+  var ag=document.getElementById('editAnsGrid');
+  var panel=document.getElementById('editAnswersPanel');
+  if(!box||!ag||!panel||panel.style.display==='none') return;
+  // ~50px per answer cell (cell height ~46px + 4px gap); 160px reserved for header/hint/buttons/padding
+  var rows=Math.max(1,Math.floor((box.clientHeight-160)/50));
+  ag.style.gridTemplateRows='repeat('+rows+',auto)';
+}
+
 function renderEditAnsGrid(answers){
   var ag=document.getElementById('editAnsGrid');
   ag.innerHTML='';
+  ag.style.gridTemplateRows='repeat(10,auto)'; // initial default; ResizeObserver adjusts on resize
   var qc=activeQCount();
   for(var q=0;q<qc;q++){
     var a=answers[q], k=S.key[q];
@@ -1982,6 +2006,12 @@ function renderEditAnsGrid(answers){
     CH.forEach(function(ch){ opts+='<option value="'+ch+'"'+(a===ch?' selected':'')+'>'+ch+'</option>'; });
     div.innerHTML='<div class="aq">'+(q+1)+'</div><select class="ans-sel" data-q="'+q+'" onchange="onEditAnsChange(this)">'+opts+'</select>';
     ag.appendChild(div);
+  }
+  if(_ansGridResizeObserver) _ansGridResizeObserver.disconnect();
+  var _box=document.querySelector('#editModal .modal-box');
+  if(_box&&window.ResizeObserver){
+    _ansGridResizeObserver=new ResizeObserver(updateEditAnsGridHeight);
+    _ansGridResizeObserver.observe(_box);
   }
 }
 
@@ -2021,6 +2051,7 @@ function saveEditAnswers(){
 function closeEditModal(){
   document.getElementById('editModal').style.display='none';
   _editIdx=-1;
+  if(_ansGridResizeObserver){_ansGridResizeObserver.disconnect();_ansGridResizeObserver=null;}
 }
 
 function closeEditModalOnBg(e){
