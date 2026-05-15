@@ -58,6 +58,10 @@ const STORE_KEY='bubbleGrader.v1';
 var adjDragging=-1;
 var _editIdx=-1;
 var _editMatchIdx=0;
+var _editRosterId='';
+var _editRosterEntryIdx=0;
+var _rosterSortCol=null;
+var _rosterSortDir=0; // 0=default(last/first), 1=asc, 2=desc
 var cropState={active:false,dragging:false,startX:0,startY:0,x:0,y:0,w:0,h:0};
 var perspState={active:false,handles:null,dragging:-1};
 var previewReq=0;
@@ -293,8 +297,12 @@ function makeSheetSVG(){
     s+='<rect x="'+(m.pt[0]-m.size/2)+'" y="'+(m.pt[1]-m.size/2)+'" width="'+m.size+'" height="'+m.size+'" fill="black"/>';
   });
 
-  // Mid-row horizontal divider
-  s+='<line x1="56" y1="486" x2="760" y2="486" stroke="#ccc" stroke-width="0.8"/>';
+  // Alignment guide lines: endpoints stop exactly at marker centres
+  s+='<line x1="88"  y1="84"  x2="660" y2="84"  stroke="#ccc" stroke-width="0.6"/>'; // top (TL→TR)
+  s+='<line x1="88"  y1="486" x2="660" y2="486" stroke="#ccc" stroke-width="0.6"/>'; // mid (ML→MR)
+  s+='<line x1="88"  y1="942" x2="660" y2="942" stroke="#ccc" stroke-width="0.6"/>'; // bottom (BL→BR)
+  s+='<line x1="88"  y1="84"  x2="88"  y2="942" stroke="#ccc" stroke-width="0.6"/>'; // left (TL→BL)
+  s+='<line x1="660" y1="84"  x2="660" y2="942" stroke="#ccc" stroke-width="0.6"/>'; // right (TR→BR)
 
   // Header — Name box + Period box
   s+='<text x="72" y="55" font-family="Arial,sans-serif" font-size="13" fill="#111">Name</text>';
@@ -524,7 +532,7 @@ function rotCanv(src,deg){
   var tmp=document.createElement('canvas');
   if(deg===90||deg===270){tmp.width=src.height;tmp.height=src.width;}
   else{tmp.width=src.width;tmp.height=src.height;}
-  var ctx=tmp.getContext('2d');
+  var ctx=tmp.getContext('2d',{willReadFrequently:true});
   ctx.translate(tmp.width/2,tmp.height/2);
   ctx.rotate(deg*Math.PI/180);
   ctx.drawImage(src,-src.width/2,-src.height/2);
@@ -538,7 +546,7 @@ function applySessionRotation(src){
   if(S.sessionRotation) return rotCanv(src,S.sessionRotation);
   var tmp=document.createElement('canvas');
   tmp.width=src.width; tmp.height=src.height;
-  tmp.getContext('2d').drawImage(src,0,0);
+  tmp.getContext('2d',{willReadFrequently:true}).drawImage(src,0,0);
   return tmp;
 }
 
@@ -560,7 +568,7 @@ function flipPending(axis){
   var src=S.baseCanvas||S.rawCanvas;
   var tmp=document.createElement('canvas');
   tmp.width=src.width;tmp.height=src.height;
-  var ctx=tmp.getContext('2d');
+  var ctx=tmp.getContext('2d',{willReadFrequently:true});
   if(axis==='h'){ctx.transform(-1,0,0,1,src.width,0);}
   else{ctx.transform(1,0,0,-1,0,src.height);}
   ctx.drawImage(src,0,0);
@@ -1416,6 +1424,25 @@ function redrawHandles(){
   var camW=Math.sqrt(dx*dx+dy*dy);
   var sc=Math.max(0.5,camW/(TC.TR[0]-TC.TL[0]));
   var hr=Math.max(13,sc*13), lw=Math.max(1.5,sc*2);
+
+  // Guide lines connecting the 6 handle positions — drawn under the handles
+  ctx.save();
+  ctx.setLineDash([Math.max(5,sc*6),Math.max(3,sc*3)]);
+  ctx.strokeStyle='rgba(34,197,94,0.75)';
+  ctx.lineWidth=Math.max(1,lw*0.6);
+  function gl(a,b){ ctx.beginPath(); ctx.moveTo(a[0],a[1]); ctx.lineTo(b[0],b[1]); ctx.stroke(); }
+  gl(sc_[0],sc_[1]); // top edge
+  gl(sc_[2],sc_[3]); // bottom edge
+  if(sm){
+    gl(sc_[0],sm[0]); gl(sc_[2],sm[0]); // left: top→mid, bottom→mid
+    gl(sc_[1],sm[1]); gl(sc_[3],sm[1]); // right: top→mid, bottom→mid
+    gl(sm[0],sm[1]);                     // mid-row horizontal
+  } else {
+    gl(sc_[0],sc_[2]); // left edge (continuous when no mid handles)
+    gl(sc_[1],sc_[3]); // right edge
+  }
+  ctx.restore();
+
   // Corner handles — amber
   S.manualCorners.forEach(function(pt){
     ctx.strokeStyle='#f59e0b'; ctx.lineWidth=lw;
@@ -1689,6 +1716,13 @@ function importRosterCSV(e){
   reader.readAsText(file);
 }
 
+function downloadRosterTemplate(){
+  var csv='StudentID,Last,First,Class,Section,Period\n11111111,Doe,John,Biology 101,A,3\n22222222,Smith,Jane,Algebra II H,B,5\n';
+  var a=document.createElement('a');
+  a.href='data:text/csv;charset=utf-8,'+encodeURIComponent(csv);
+  a.download='roster-template.csv'; a.click();
+}
+
 function clearRoster(){
   S.roster={};
   saveData();
@@ -1698,10 +1732,106 @@ function clearRoster(){
 
 function updateRosterUI(){
   var count=Object.keys(S.roster).length;
-  var statusEl=document.getElementById('rosterStatus');
+  var noDataEl=document.getElementById('rosterNoData');
+  var statusBtn=document.getElementById('rosterStatus');
   var clearBtn=document.getElementById('rosterClearBtn');
-  if(statusEl) statusEl.textContent=count>0?count+' students loaded':'No roster loaded — upload a CSV with StudentID, Last, First (and optionally Class, Section, Period) to map bubble IDs to student names.';
+  var dlBtn=document.getElementById('rosterDownloadBtn');
+  var tableWrap=document.getElementById('rosterTableWrap');
+  if(noDataEl) noDataEl.style.display=count>0?'none':'';
+  if(statusBtn){
+    statusBtn.style.display=count>0?'':'none';
+    statusBtn.textContent=count+' student'+(count===1?'':'s')+' loaded — click to view ▾';
+  }
   if(clearBtn) clearBtn.style.display=count>0?'':'none';
+  if(dlBtn) dlBtn.style.display=count>0?'':'none';
+  if(tableWrap) tableWrap.style.display='none';
+}
+
+function toggleRosterTable(){
+  var wrap=document.getElementById('rosterTableWrap');
+  var btn=document.getElementById('rosterStatus');
+  if(!wrap) return;
+  var opening=wrap.style.display==='none';
+  if(opening) buildRosterTable();
+  wrap.style.display=opening?'':'none';
+  var count=Object.keys(S.roster).length;
+  if(btn) btn.textContent=count+' student'+(count===1?'':'s')+' loaded — click to '+(opening?'hide ▴':'view ▾');
+}
+
+function buildRosterTable(){
+  var tbl=document.getElementById('rosterTable');
+  if(!tbl) return;
+  var keys=Object.keys(S.roster);
+  var hasCls=false,hasSec=false,hasPer=false;
+  keys.forEach(function(k){
+    rosterGetAll(k).forEach(function(r){
+      if(r.cls) hasCls=true; if(r.section) hasSec=true; if(r.period) hasPer=true;
+    });
+  });
+
+  // Flatten all entries into a sortable array
+  var rows=[];
+  keys.forEach(function(id){
+    rosterGetAll(id).forEach(function(r,idx){ rows.push({id:id,idx:idx,r:r}); });
+  });
+
+  // Sort
+  function sv(row,col){
+    if(col==='id') return row.id;
+    if(col==='last') return (row.r.last||'').toLowerCase();
+    if(col==='first') return (row.r.first||'').toLowerCase();
+    if(col==='cls') return (row.r.cls||'').toLowerCase();
+    if(col==='section') return (row.r.section||'').toLowerCase();
+    if(col==='period') return (row.r.period||'').toLowerCase();
+    return '';
+  }
+  function subSort(a,b){
+    var al=(a.r.last||'').toLowerCase(),bl=(b.r.last||'').toLowerCase();
+    if(al!==bl) return al<bl?-1:1;
+    var af=(a.r.first||'').toLowerCase(),bf=(b.r.first||'').toLowerCase();
+    return af<bf?-1:af>bf?1:0;
+  }
+  rows.sort(function(a,b){
+    if(!_rosterSortCol||_rosterSortDir===0) return subSort(a,b);
+    var dir=_rosterSortDir===1?1:-1;
+    var av=sv(a,_rosterSortCol),bv=sv(b,_rosterSortCol);
+    if(av!==bv) return av<bv?-dir:dir;
+    // Sub-sort by name for group columns; sub-sort by first when primary is last
+    if(_rosterSortCol==='last'){
+      var af=(a.r.first||'').toLowerCase(),bf=(b.r.first||'').toLowerCase();
+      return af<bf?-1:af>bf?1:0;
+    }
+    if(_rosterSortCol!=='first') return subSort(a,b);
+    return 0;
+  });
+
+  // Header helper
+  function th(col,label){
+    var active=_rosterSortCol===col&&_rosterSortDir>0;
+    var ind=active?(_rosterSortDir===1?' ▲':' ▼'):' ↕';
+    return '<th class="sortable" onclick="rosterSortBy(\''+col+'\')">'
+      +label+'<span style="color:'+(active?'var(--accent)':'var(--bdr)')+'">'+ind+'</span></th>';
+  }
+
+  var h='<thead><tr>'+th('id','ID')+th('last','Last')+th('first','First');
+  if(hasCls)  h+=th('cls','Class');
+  if(hasSec)  h+=th('section','Section');
+  if(hasPer)  h+=th('period','Period');
+  h+='<th></th></tr></thead><tbody>';
+
+  rows.forEach(function(item){
+    var r=item.r;
+    h+='<tr>'
+      +'<td>'+esc(item.id)+'</td>'
+      +'<td>'+esc(r.last||'')+'</td>'
+      +'<td>'+esc(r.first||'')+'</td>';
+    if(hasCls)  h+='<td>'+esc(r.cls||'')+'</td>';
+    if(hasSec)  h+='<td>'+esc(r.section||'')+'</td>';
+    if(hasPer)  h+='<td>'+esc(r.period||'')+'</td>';
+    h+='<td><button class="btn sm" data-id="'+esc(item.id)+'" data-idx="'+item.idx+'" onclick="openEditRoster(this.dataset.id,+this.dataset.idx)">Edit</button></td>'
+      +'</tr>';
+  });
+  tbl.innerHTML=h+'</tbody>';
 }
 
 // ── Results ──
@@ -1732,7 +1862,7 @@ function buildResults(){
     if(showClass)   hcols+='<th>Class</th>';
     if(showSection) hcols+='<th>Section</th>';
     if(showPeriod)  hcols+='<th>Period</th>';
-    hcols+='<th>ID</th><th>Score</th><th>%</th><th>Status</th><th></th></tr>';
+    hcols+='<th>ID</th><th>Score</th><th>%</th><th>Status</th><th>Edit / Remove</th></tr>';
     thead.innerHTML=hcols;
   }
   // Last added
@@ -1809,6 +1939,7 @@ function openEditInfo(origIdx){
   document.getElementById('editModalTitle').textContent='Edit Student Info';
   document.getElementById('editInfoPanel').style.display='';
   document.getElementById('editAnswersPanel').style.display='none';
+  document.getElementById('editRosterPanel').style.display='none';
   document.getElementById('editModal').style.display='';
 }
 
@@ -1832,6 +1963,7 @@ function openEditAnswers(origIdx){
   document.getElementById('editModalTitle').textContent='Edit Answers — '+esc(s.name);
   document.getElementById('editInfoPanel').style.display='none';
   document.getElementById('editAnswersPanel').style.display='';
+  document.getElementById('editRosterPanel').style.display='none';
   document.getElementById('editModal').style.display='';
   renderEditAnsGrid(normalizeAnswers(s.answers,activeQCount()));
 }
@@ -1892,6 +2024,98 @@ function closeEditModal(){
 
 function closeEditModalOnBg(e){
   if(e.target===document.getElementById('editModal')) closeEditModal();
+}
+
+function rosterSortBy(col){
+  if(_rosterSortCol===col){
+    _rosterSortDir=(_rosterSortDir+1)%3;
+    if(_rosterSortDir===0) _rosterSortCol=null;
+  } else {
+    _rosterSortCol=col;
+    _rosterSortDir=1;
+  }
+  buildRosterTable();
+}
+
+function openEditRoster(id,entryIdx){
+  var entries=rosterGetAll(id);
+  var r=entries[entryIdx||0]||{};
+  _editRosterId=id;
+  _editRosterEntryIdx=entryIdx||0;
+  document.getElementById('editRosterIdDisplay').value=id;
+  document.getElementById('editRosterLast').value=r.last||'';
+  document.getElementById('editRosterFirst').value=r.first||'';
+  document.getElementById('editRosterClass').value=r.cls||'';
+  document.getElementById('editRosterSection').value=r.section||'';
+  document.getElementById('editRosterPeriod').value=r.period||'';
+  document.getElementById('editModalTitle').textContent='Edit Roster Entry';
+  document.getElementById('editInfoPanel').style.display='none';
+  document.getElementById('editAnswersPanel').style.display='none';
+  document.getElementById('editRosterPanel').style.display='';
+  document.getElementById('editModal').style.display='';
+}
+
+function saveEditRoster(){
+  var entries=rosterGetAll(_editRosterId);
+  if(!entries[_editRosterEntryIdx]) return;
+  var newId=document.getElementById('editRosterIdDisplay').value.trim()||_editRosterId;
+  var updated={
+    last:document.getElementById('editRosterLast').value.trim(),
+    first:document.getElementById('editRosterFirst').value.trim(),
+    cls:document.getElementById('editRosterClass').value.trim(),
+    section:document.getElementById('editRosterSection').value.trim(),
+    period:document.getElementById('editRosterPeriod').value.trim()
+  };
+  if(newId!==_editRosterId){
+    // Remove from old ID; delete key if it was the only entry
+    entries.splice(_editRosterEntryIdx,1);
+    if(entries.length===0) delete S.roster[_editRosterId];
+    else S.roster[_editRosterId]=entries;
+    // Append to new ID (creates it if absent)
+    var dest=rosterGetAll(newId);
+    dest.push(updated);
+    S.roster[newId]=dest;
+  } else {
+    entries[_editRosterEntryIdx]=updated;
+    S.roster[_editRosterId]=entries;
+  }
+  saveData();
+  var wrap=document.getElementById('rosterTableWrap');
+  var wasOpen=wrap&&wrap.style.display!=='none';
+  updateRosterUI();
+  if(wasOpen){
+    wrap.style.display='';
+    buildRosterTable();
+    var count=Object.keys(S.roster).length;
+    var btn=document.getElementById('rosterStatus');
+    if(btn) btn.textContent=count+' student'+(count===1?'':'s')+' loaded — click to hide ▴';
+  }
+  closeEditModal();
+}
+
+function downloadRosterCSV(){
+  var keys=Object.keys(S.roster);
+  var hasCls=false,hasSec=false,hasPer=false;
+  keys.forEach(function(k){
+    rosterGetAll(k).forEach(function(r){
+      if(r.cls) hasCls=true; if(r.section) hasSec=true; if(r.period) hasPer=true;
+    });
+  });
+  var header='StudentID,Last,First'+(hasCls?',Class':'')+(hasSec?',Section':'')+(hasPer?',Period':'')+'\n';
+  function qe(v){return '"'+String(v||'').replace(/"/g,'""')+'"';}
+  var body='';
+  keys.slice().sort().forEach(function(id){
+    rosterGetAll(id).forEach(function(r){
+      var row=qe(id)+','+qe(r.last||'')+','+qe(r.first||'');
+      if(hasCls)  row+=','+qe(r.cls||'');
+      if(hasSec)  row+=','+qe(r.section||'');
+      if(hasPer)  row+=','+qe(r.period||'');
+      body+=row+'\n';
+    });
+  });
+  var a=document.createElement('a');
+  a.href='data:text/csv;charset=utf-8,'+encodeURIComponent(header+body);
+  a.download='roster.csv'; a.click();
 }
 
 function buildAnalytics(){
@@ -2012,7 +2236,7 @@ function importKeyCSV(e){
     buildResults();
     document.getElementById('keyFile').value='';
     var count=S.key.slice(0,activeQCount()).filter(function(a){return a!==null;}).length;
-    alert('Loaded '+count+' of '+activeQCount()+' answers from "'+file.name+'".');
+    setAlert('ok','Loaded '+count+' of '+activeQCount()+' answers from "'+file.name+'".');
   };
   reader.readAsText(file);
 }
@@ -2030,6 +2254,7 @@ loadSavedData();
 buildKeyGrid();
 updateHeader();
 updateRosterUI();
+setMethod('camera');
 buildResults();
 document.getElementById('className').addEventListener('input',function(){ updateHeader(); saveData(); });
 document.getElementById('passPct').addEventListener('input',function(){ saveData(); buildResults(); });
