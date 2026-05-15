@@ -2027,24 +2027,35 @@ function openEditAnswers(origIdx){
   document.getElementById('editAnswersPanel').style.display='';
   document.getElementById('editRosterPanel').style.display='none';
   document.getElementById('editModal').style.display='';
+  // Allow the modal to compress to exactly the sheet's column count (1 col per 25 Qs).
+  // Each cell needs ~50px + 40px for padding; CSS default min-width of 300px would floor
+  // the minimum at 5 columns, so we override it here.
+  var minCols=Math.ceil(activeQCount()/25);
+  var box=document.querySelector('#editModal .modal-box');
+  if(box) box.style.minWidth=(minCols*50+60)+'px';
   renderEditAnsGrid(normalizeAnswers(s.answers,activeQCount()));
 }
 
-function updateEditAnsGridHeight(){
-  var box=document.querySelector('#editModal .modal-box');
+function updateEditAnsGridLayout(w){
   var ag=document.getElementById('editAnsGrid');
   var panel=document.getElementById('editAnswersPanel');
-  if(!box||!ag||!panel||panel.style.display==='none') return;
-  // ~50px per answer cell (cell height ~46px + 4px gap); 160px reserved for header/hint/buttons/padding
-  var rows=Math.max(1,Math.floor((box.clientHeight-160)/50));
-  ag.style.gridTemplateRows='repeat('+rows+',auto)';
+  if(!ag||!panel||panel.style.display==='none') return;
+  if(!w){ var r=ag.getBoundingClientRect(); w=r.width; }
+  if(!w) return;
+  var qc=activeQCount();
+  // Minimum columns = sheet column count (1 col per 25 questions: 1–25→1, 26–50→2, etc.)
+  // Width drives column count: each cell needs ~50px; cap at 10 columns.
+  var minCols=Math.ceil(qc/25);
+  var cols=Math.min(10,Math.max(minCols,Math.floor(w/50)));
+  ag.style.gridTemplateRows='repeat('+Math.ceil(qc/cols)+',auto)';
 }
 
 function renderEditAnsGrid(answers){
   var ag=document.getElementById('editAnsGrid');
   ag.innerHTML='';
-  ag.style.gridTemplateRows='repeat(10,auto)'; // initial default; ResizeObserver adjusts on resize
   var qc=activeQCount();
+  // Start with 10 columns (ceil(qc/10) rows); ResizeObserver adjusts as modal is resized.
+  ag.style.gridTemplateRows='repeat('+Math.ceil(qc/10)+',auto)';
   for(var q=0;q<qc;q++){
     var a=answers[q], k=S.key[q];
     var cls=''; if(!a) cls='blk'; else if(k) cls=a===k?'cor':'wrg';
@@ -2056,10 +2067,14 @@ function renderEditAnsGrid(answers){
     ag.appendChild(div);
   }
   if(_ansGridResizeObserver) _ansGridResizeObserver.disconnect();
-  var _box=document.querySelector('#editModal .modal-box');
-  if(_box&&window.ResizeObserver){
-    _ansGridResizeObserver=new ResizeObserver(updateEditAnsGridHeight);
-    _ansGridResizeObserver.observe(_box);
+  if(window.ResizeObserver){
+    // Observe the grid itself — contentRect.width is accurate even on the initial fire,
+    // unlike clientHeight of the modal box which can be 0 before first layout.
+    _ansGridResizeObserver=new ResizeObserver(function(entries){
+      if(entries[0]&&entries[0].contentRect.width>0)
+        updateEditAnsGridLayout(entries[0].contentRect.width);
+    });
+    _ansGridResizeObserver.observe(ag);
   }
 }
 
@@ -2100,6 +2115,8 @@ function closeEditModal(){
   document.getElementById('editModal').style.display='none';
   _editIdx=-1;
   if(_ansGridResizeObserver){_ansGridResizeObserver.disconnect();_ansGridResizeObserver=null;}
+  var box=document.querySelector('#editModal .modal-box');
+  if(box) box.style.minWidth='';
 }
 
 function closeEditModalOnBg(e){
