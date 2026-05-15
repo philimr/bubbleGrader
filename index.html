@@ -249,10 +249,12 @@
         <span id="lastAdded" style="font-size:12px;color:var(--muted);margin-right:auto;padding-left:12px"></span>
         <button class="btn pa" onclick="exportCSV()">↓ Export CSV</button>
       </div>
-      <table class="rt">
-        <thead id="resHead"><tr><th>#</th><th>Student</th><th>ID</th><th>Score</th><th>%</th><th>Status</th><th></th></tr></thead>
-        <tbody id="resBody"></tbody>
-      </table>
+      <div class="tbl-wrap">
+        <table class="rt">
+          <thead id="resHead"><tr><th>#</th><th>Student</th><th>ID</th><th>Score</th><th>%</th><th>Status</th><th></th></tr></thead>
+          <tbody id="resBody"></tbody>
+        </table>
+      </div>
     </div>
     <div class="card">
       <div class="ch">
@@ -265,6 +267,43 @@
 </div>
 
 <canvas id="captCanvas" style="display:none"></canvas>
+
+<!-- Edit modal (student info + answers) -->
+<div id="editModal" class="modal-overlay" style="display:none" onclick="closeEditModalOnBg(event)">
+  <div class="modal-box">
+    <div class="ch">
+      <div class="ct" id="editModalTitle">Edit Student</div>
+      <button class="btn sm" onclick="closeEditModal()">✕ Close</button>
+    </div>
+
+    <!-- Info panel -->
+    <div id="editInfoPanel">
+      <div class="fr">
+        <div class="fg"><label class="fl">Last Name</label><input type="text" id="editLast" placeholder="Last name"></div>
+        <div class="fg"><label class="fl">First Name</label><input type="text" id="editFirst" placeholder="First name"></div>
+      </div>
+      <div class="fr">
+        <div class="fg" style="flex:0 0 155px"><label class="fl">Student ID</label><input type="text" id="editStudentId" maxlength="8" style="font-family:monospace;letter-spacing:.08em"></div>
+        <div class="fg" style="position:relative"><label class="fl">Class Name <button id="btnEditNextMatch" class="btn sm" style="position:absolute;right:0;top:0;display:none;font-size:8px;padding:2px 3px;background:lightgray;border-color:lightgray" onclick="nextEditMatch()">↻ Next Section</button></label><input type="text" id="editClassName"></div>
+        <div class="fg" style="flex:0 0 100px"><label class="fl">Period</label><input type="text" id="editPeriod"></div>
+      </div>
+      <div class="row" style="justify-content:flex-end;margin-top:14px">
+        <button class="btn sm" onclick="closeEditModal()">Cancel</button>
+        <button class="btn ga" onclick="saveEditInfo()">✓ Save</button>
+      </div>
+    </div>
+
+    <!-- Answers panel -->
+    <div id="editAnswersPanel" style="display:none">
+      <p class="hint" style="margin-bottom:10px">Change any dropdown to correct a mis-read answer. Score recalculates on save.</p>
+      <div class="ag" id="editAnsGrid"></div>
+      <div class="row" style="justify-content:flex-end;margin-top:14px">
+        <button class="btn sm" onclick="closeEditModal()">Cancel</button>
+        <button class="btn ga" onclick="saveEditAnswers()">✓ Save</button>
+      </div>
+    </div>
+  </div>
+</div>
 
 <script src="app.js"></script>
 </body>
