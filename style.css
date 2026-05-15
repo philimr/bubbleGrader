@@ -130,6 +130,8 @@ input[type=file]{display:none}
 .rt{width:100%;border-collapse:collapse}
 .rt th{font-family:monospace;font-size:10px;text-transform:uppercase;letter-spacing:.06em;
   color:var(--muted);text-align:left;padding:8px 12px;border-bottom:1px solid var(--bdr)}
+.rt th.sortable{cursor:pointer;user-select:none}
+.rt th.sortable:hover{background:var(--surf2);color:var(--txt)}
 .rt td{font-family:monospace;font-size:13px;padding:9px 12px;border-bottom:1px solid var(--bdr)}
 .rt tr:hover td{background:var(--surf2)}
 .bdg{display:inline-block;padding:2px 7px;border-radius:4px;font-size:11px;font-weight:700}
