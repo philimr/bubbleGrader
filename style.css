@@ -46,8 +46,9 @@ nav{display:flex}
 .sm{padding:4px 9px;font-size:12px}
 
 /* Forms */
-.fr{display:flex;gap:10px;margin-bottom:10px}
-.fg{flex:1}
+.fr{display:flex;gap:10px;margin-bottom:10px;flex-wrap:wrap}
+.fg{flex:1;min-width:130px}
+.tbl-wrap{overflow-x:auto}
 .fl{display:block;font-size:11px;font-weight:700;text-transform:uppercase;
   letter-spacing:.07em;color:var(--muted);margin-bottom:4px}
 input[type=text],input[type=number],select{width:100%;background:var(--surf);border:1px solid var(--bdr);
@@ -146,6 +147,21 @@ input[type=file]{display:none}
 .bfill{height:100%;border-radius:3px;transition:width .4s ease;min-width:0;background:var(--blu)}
 .bfill.c{background:var(--grn)}.bfill.h{background:var(--accent)}
 .bn{font-family:monospace;font-size:10px;color:var(--muted);width:18px;text-align:right}
+
+/* Answer dropdowns (scan grid + edit modal) */
+.ans-sel{width:100%;font-family:monospace;font-size:12px;font-weight:700;
+  border:1px solid var(--bdr);border-radius:4px;background:var(--surf);
+  color:var(--txt);cursor:pointer;padding:2px 0;outline:none}
+.ac.cor .ans-sel{background:var(--gbg);color:var(--grn);border-color:var(--gbg)}
+.ac.wrg .ans-sel{background:var(--rbg);color:var(--red);border-color:var(--rbg)}
+.ac.blk .ans-sel{color:var(--muted)}
+.ac.mul .ans-sel{color:var(--accent)}
+
+/* Edit modal */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:200;
+  display:flex;align-items:flex-start;justify-content:center;padding:40px 18px;overflow-y:auto}
+.modal-box{background:var(--surf);border:1px solid var(--bdr);border-radius:12px;
+  padding:20px;max-width:720px;width:100%}
 
 .hint{font-size:12px;color:var(--muted);margin-bottom:11px;line-height:1.6}
 .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
