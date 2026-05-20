@@ -91,15 +91,15 @@
     <div class="fr">
       <div class="fg" style="flex:1">
         <label class="fl">Last Name</label>
-        <input type="text" id="stuLast" placeholder="">
+        <input type="text" id="stuLast" placeholder="" oninput="onStuFieldInput('stuLast')" onkeydown="onStuFieldKeyDown(event,'stuLast')">
       </div>
       <div class="fg" style="flex:1">
         <label class="fl">First Name</label>
-        <input type="text" id="stuFirst" placeholder="">
+        <input type="text" id="stuFirst" placeholder="" oninput="onStuFieldInput('stuFirst')" onkeydown="onStuFieldKeyDown(event,'stuFirst')">
       </div>
       <div class="fg" style="flex:0 0 150px">
         <label class="fl">Student ID <span id="stuIdStatus" style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--muted)"></span></label>
-        <input type="text" id="stuIdField" placeholder="" maxlength="8" style="font-family:monospace;letter-spacing:.08em">
+        <input type="text" id="stuIdField" placeholder="" maxlength="8" style="font-family:monospace;letter-spacing:.08em" oninput="onStuFieldInput('stuIdField')" onkeydown="onStuFieldKeyDown(event,'stuIdField')">
       </div>
       <div class="fg" style="flex:1; position: relative;">
         <label class="fl">Class Name <button id="btnNextMatch" class="btn sm" style="position: absolute; right:0px; top: 0px;display:none; font-size:8px; padding: 2px 3px;background-color: lightgray;" onclick="nextRosterMatch()">↻ Next Match</button></label>
