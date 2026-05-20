@@ -1821,6 +1821,21 @@ function onStuFieldKeyDown(e,sourceField){
   }
 }
 
+function clearStuNameId(){
+  var _l=document.getElementById('stuLast'); if(_l) _l.value='';
+  var _f=document.getElementById('stuFirst'); if(_f) _f.value='';
+  var _i=document.getElementById('stuIdField'); if(_i) _i.value='';
+  var _s=document.getElementById('stuIdStatus'); if(_s) _s.textContent='';
+  _scanSearchMatches=[]; _scanSearchIdx=0; _scanAutoLen={};
+  var _nm=document.getElementById('btnNextMatch'); if(_nm) _nm.style.display='none';
+}
+
+function clearStuAllFields(){
+  clearStuNameId();
+  var _c=document.getElementById('scanClassName'); if(_c) _c.value='';
+  var _p=document.getElementById('scanPeriod'); if(_p) _p.value='';
+}
+
 function rosterOptCols(){
   var cls=false,sec=false,per=false;
   var keys=Object.keys(S.roster);
