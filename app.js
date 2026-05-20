@@ -64,6 +64,9 @@ var _editRosterEntryIdx=0;
 var _rosterSortCol=null;
 var _rosterSortDir=0; // 0=default(last/first), 1=asc, 2=desc
 var _ansGridResizeObserver=null;
+var _scanSearchMatches=[]; // [{id, entry}] from live name/id search
+var _scanSearchIdx=0;
+var _scanAutoLen={}; // typed length per field, before ghost was appended
 var cropState={active:false,dragging:false,startX:0,startY:0,x:0,y:0,w:0,h:0};
 var perspState={active:false,handles:null,dragging:-1};
 var previewReq=0;
@@ -468,6 +471,7 @@ function retake(){
   var _rf=document.getElementById('stuFirst'); if(_rf) _rf.value='';
   var _ri=document.getElementById('stuIdField'); if(_ri){_ri.value=''; var _rs=document.getElementById('stuIdStatus'); if(_rs) _rs.textContent='';}
   S.rosterMatchIdx=0;
+  _scanSearchMatches=[]; _scanSearchIdx=0; _scanAutoLen={};
   var _nm=document.getElementById('btnNextMatch'); if(_nm) _nm.style.display='none';
   document.getElementById('preScanCard').style.display='none';
   var isCamera=document.getElementById('mCamera').classList.contains('on');
@@ -1230,8 +1234,9 @@ function showScore(det){
     if(idStatus) idStatus.textContent=scannedId?'(detected)':'(not detected)';
   }
   S.rosterMatchIdx=0;
-  var allMatches=rosterGetAll(scannedId);
-  var rEntry=allMatches[0]||null;
+  _scanSearchMatches=rosterGetAll(scannedId).map(function(e){return{id:scannedId,entry:e};});
+  _scanSearchIdx=0;
+  var rEntry=_scanSearchMatches.length>0?_scanSearchMatches[0].entry:null;
   var lastEl=document.getElementById('stuLast');
   var firstEl=document.getElementById('stuFirst');
   if(lastEl) lastEl.value=rEntry?rEntry.last:'';
@@ -1243,7 +1248,7 @@ function showScore(det){
     if(perEl&&rEntry.period) perEl.value=rEntry.period;
   }
   var nmBtn=document.getElementById('btnNextMatch');
-  if(nmBtn) nmBtn.style.display=allMatches.length>1?'':'none';
+  if(nmBtn) nmBtn.style.display=_scanSearchMatches.length>1?'':'none';
   var ag=document.getElementById('ansGrid');
   ag.innerHTML='';
   ag.style.gridTemplateRows='repeat(10,auto)';
@@ -1288,6 +1293,12 @@ function updateScanScore(){
 }
 
 function nextRosterMatch(){
+  if(_scanSearchMatches.length>1){
+    _scanSearchIdx=(_scanSearchIdx+1)%_scanSearchMatches.length;
+    _applySearchMatch(_scanSearchMatches[_scanSearchIdx],null);
+    return;
+  }
+  // Fallback: cycle same-ID multi-section entries
   var id=(document.getElementById('stuIdField')||{}).value||'';
   id=(id.trim())||S.detectedId||'';
   var all=rosterGetAll(id);
@@ -1330,6 +1341,7 @@ function saveStudent(){
   var _sf=document.getElementById('stuFirst'); if(_sf) _sf.value='';
   var _idf=document.getElementById('stuIdField'); if(_idf){_idf.value=''; var _ids=document.getElementById('stuIdStatus'); if(_ids) _ids.textContent='';}
   S.rosterMatchIdx=0;
+  _scanSearchMatches=[]; _scanSearchIdx=0; _scanAutoLen={};
   var _nm=document.getElementById('btnNextMatch'); if(_nm) _nm.style.display='none';
   document.getElementById('imgFile').value='';
   document.getElementById('uploadName').textContent='';
@@ -1707,6 +1719,106 @@ function rosterGetAll(id){
 
 function rosterHasData(){
   return Object.keys(S.roster).length>0;
+}
+
+function rosterSearchByField(sourceField,value){
+  var q=value.toLowerCase();
+  var results=[];
+  var keys=Object.keys(S.roster);
+  for(var i=0;i<keys.length;i++){
+    var k=keys[i];
+    var entries=rosterGetAll(k);
+    for(var j=0;j<entries.length;j++){
+      var e=entries[j];
+      if(sourceField==='stuIdField'){
+        if(!k.toLowerCase().startsWith(q)) continue;
+      } else if(sourceField==='stuLast'){
+        if(!(e.last||'').toLowerCase().startsWith(q)) continue;
+      } else if(sourceField==='stuFirst'){
+        if(!(e.first||'').toLowerCase().startsWith(q)) continue;
+      } else { continue; }
+      results.push({id:k,entry:e});
+    }
+  }
+  if(sourceField==='stuIdField'){
+    results.sort(function(a,b){ return a.id<b.id?-1:a.id>b.id?1:0; });
+  } else {
+    results.sort(function(a,b){
+      var al=(a.entry.last||'').toLowerCase(),bl=(b.entry.last||'').toLowerCase();
+      if(al<bl)return -1;if(al>bl)return 1;
+      var af=(a.entry.first||'').toLowerCase(),bf=(b.entry.first||'').toLowerCase();
+      return af<bf?-1:af>bf?1:0;
+    });
+  }
+  return results;
+}
+
+function _applySearchMatch(match,skipField){
+  var e=match.entry;
+  var lastEl=document.getElementById('stuLast');
+  var firstEl=document.getElementById('stuFirst');
+  var idEl=document.getElementById('stuIdField');
+  var idStatus=document.getElementById('stuIdStatus');
+  var clsEl=document.getElementById('scanClassName');
+  var perEl=document.getElementById('scanPeriod');
+  if(lastEl&&skipField!=='stuLast') lastEl.value=e.last||'';
+  if(firstEl&&skipField!=='stuFirst') firstEl.value=e.first||'';
+  if(idEl&&skipField!=='stuIdField'){
+    idEl.value=match.id||'';
+    if(idStatus) idStatus.textContent=match.id?'(matched)':'';
+  }
+  if(clsEl&&e.cls) clsEl.value=e.cls;
+  if(perEl&&e.period) perEl.value=e.period;
+}
+
+function onStuFieldInput(sourceField){
+  if(!rosterHasData()) return;
+  var inp=document.getElementById(sourceField);
+  if(!inp) return;
+  _scanAutoLen[sourceField]=inp.value.length;
+  _onStuFieldSearch(sourceField,inp.value.trim(),true);
+}
+
+function _onStuFieldSearch(sourceField,value,applyGhost){
+  var matches=value?rosterSearchByField(sourceField,value):[];
+  _scanSearchMatches=matches;
+  _scanSearchIdx=0;
+  var nmBtn=document.getElementById('btnNextMatch');
+  if(nmBtn) nmBtn.style.display=matches.length>1?'':'none';
+  if(matches.length===0) return;
+  _applySearchMatch(matches[0],sourceField);
+  if(applyGhost) _applyGhost(sourceField,value,matches[0]);
+}
+
+function _applyGhost(sourceField,typedValue,match){
+  if(!typedValue) return;
+  var inp=document.getElementById(sourceField);
+  if(!inp) return;
+  var fullText;
+  if(sourceField==='stuLast') fullText=match.entry.last||'';
+  else if(sourceField==='stuFirst') fullText=match.entry.first||'';
+  else if(sourceField==='stuIdField') fullText=match.id||'';
+  else return;
+  if(!fullText.toLowerCase().startsWith(typedValue.toLowerCase())) return;
+  if(fullText.length<=typedValue.length) return;
+  inp.value=fullText;
+  inp.setSelectionRange(typedValue.length,fullText.length);
+  _scanAutoLen[sourceField]=typedValue.length;
+}
+
+function onStuFieldKeyDown(e,sourceField){
+  var inp=document.getElementById(sourceField);
+  if(!inp) return;
+  var start=inp.selectionStart, end=inp.selectionEnd;
+  // Backspace while ghost is selected: dismiss ghost and delete one real char
+  if(e.key==='Backspace'&&start<end&&end===inp.value.length){
+    e.preventDefault();
+    var newLen=start>0?start-1:0;
+    inp.value=inp.value.substring(0,newLen);
+    inp.setSelectionRange(newLen,newLen);
+    _scanAutoLen[sourceField]=newLen;
+    if(rosterHasData()) _onStuFieldSearch(sourceField,inp.value.trim(),false);
+  }
 }
 
 function rosterOptCols(){
