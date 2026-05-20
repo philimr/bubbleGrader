@@ -2377,7 +2377,7 @@ function exportCSV(){
   if(showClass)   rosterCols+=',Class';
   if(showSection) rosterCols+=',Section';
   if(showPeriod)  rosterCols+=',Period';
-  var csv='Student,Student ID'+rosterCols+','+Array.from({length:qc},function(_,i){return 'Q'+(i+1);}).join(',')+',Score,Out of,Percentage\n';
+  var csv='Student,Student ID'+rosterCols+','+Array.from({length:qc},function(_,i){return i+1;}).join(',')+',Score,Out of,Percentage\n';
   function qe(v){return '"'+String(v||'').replace(/"/g,'""')+'"';}
   S.students.forEach(function(s){
     var r=useRoster?rosterGet(s.studentId):null;
