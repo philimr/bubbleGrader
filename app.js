@@ -2372,17 +2372,19 @@ function exportCSV(){
   var showClass=hasScanClass||(useRoster&&opt.cls);
   var showSection=useRoster&&opt.section;
   var showPeriod=hasScanPeriod||(useRoster&&opt.period);
-  var rosterCols='';
-  if(useRoster){rosterCols+=',Last,First';}
-  if(showClass)   rosterCols+=',Class';
-  if(showSection) rosterCols+=',Section';
-  if(showPeriod)  rosterCols+=',Period';
-  var csv='Student,Student ID'+rosterCols+','+Array.from({length:qc},function(_,i){return 'Q'+(i+1);}).join(',')+',Score,Out of,Percentage\n';
+  var hdr='Last,First,Student ID';
+  if(showClass)   hdr+=',Class';
+  if(showSection) hdr+=',Section';
+  if(showPeriod)  hdr+=',Period';
+  hdr+=','+Array.from({length:qc},function(_,i){return i+1;}).join(',')+',Score,Out of,Percentage';
+  var csv=hdr+'\n';
   function qe(v){return '"'+String(v||'').replace(/"/g,'""')+'"';}
   S.students.forEach(function(s){
     var r=useRoster?rosterGet(s.studentId):null;
-    var row=qe(s.name)+','+qe(s.studentId||'');
-    if(useRoster){row+=','+qe(r?r.last:'')+','+qe(r?r.first:'');}
+    var last,first;
+    if(r){last=r.last||'';first=r.first||'';}
+    else{var parts=s.name&&s.name.indexOf(', ')>=0?s.name.split(', '):['',''];last=parts[0]||'';first=parts.slice(1).join(', ')||'';}
+    var row=qe(last)+','+qe(first)+','+qe(s.studentId||'');
     if(showClass)   row+=','+qe(s.className||(r?r.cls:'')||'');
     if(showSection) row+=','+qe(r?r.section:'');
     if(showPeriod)  row+=','+qe(s.period||(r?r.period:'')||'');
