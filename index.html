@@ -34,7 +34,7 @@
         <label class="btn sm" for="rosterFile">↑ Upload Roster CSV</label>
         <input type="file" id="rosterFile" accept=".csv" style="display:none" onchange="importRosterCSV(event)">
         <button class="btn sm" id="rosterDownloadBtn" onclick="downloadRosterCSV()" style="display:none">↓ Download Roster CSV</button>
-        <button class="btn sm" id="rosterClearBtn" onclick="clearRoster()" style="display:none">✕ Clear Roster</button>
+        <button class="btn sm" id="rosterClearBtn" onclick="clearRoster()" style="display:none">Clear Roster</button>
       </div>
     </div>
     <p class="hint" id="rosterNoData">No roster loaded — upload a CSV with StudentID, Last, First (and optionally Class, Section, Period) to map bubble IDs to student names.</p>
@@ -87,7 +87,13 @@
 <!-- SCAN -->
 <div class="tab" id="tab-scan">
   <div class="card">
-    <div class="ch"><div class="ct">Student Info</div></div>
+    <div class="ch">
+      <div class="ct">Student Info</div>
+      <div class="row">
+        <button class="btn sm" onclick="clearStuNameId()">Clear Name / ID</button>
+        <button class="btn sm" onclick="clearStuAllFields()">Clear All Fields</button>
+      </div>
+    </div>
     <div class="fr">
       <div class="fg" style="flex:1">
         <label class="fl">Last Name</label>
