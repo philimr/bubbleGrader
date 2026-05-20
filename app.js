@@ -2377,7 +2377,7 @@ function exportCSV(){
   if(showClass)   rosterCols+=',Class';
   if(showSection) rosterCols+=',Section';
   if(showPeriod)  rosterCols+=',Period';
-  var csv='Student,Student ID'+rosterCols+','+Array.from({length:qc},function(_,i){return i+1;}).join(',')+',Score,Out of,Percentage\n';
+  var csv='Student,Student ID'+rosterCols+','+Array.from({length:qc},function(_,i){return 'Q'+(i+1);}).join(',')+',Score,Out of,Percentage\n';
   function qe(v){return '"'+String(v||'').replace(/"/g,'""')+'"';}
   S.students.forEach(function(s){
     var r=useRoster?rosterGet(s.studentId):null;
@@ -2395,7 +2395,7 @@ function exportCSV(){
     var cnt={A:0,B:0,C:0,D:0,E:0}, bl=0;
     S.students.forEach(function(s){ var a=s.answers[q]; if(a&&cnt[a]!==undefined) cnt[a]++; else bl++; });
     var k=S.key[q]||'';
-    csv+='Q'+(q+1)+','+cnt.A+','+cnt.B+','+cnt.C+','+cnt.D+','+cnt.E+','+bl+','+k+','+(k&&tot?Math.round((cnt[k]||0)/tot*100)+'%':'')+'\n';
+    csv+=(q+1)+','+cnt.A+','+cnt.B+','+cnt.C+','+cnt.D+','+cnt.E+','+bl+','+k+','+(k&&tot?Math.round((cnt[k]||0)/tot*100)+'%':'')+'\n';
   }
   var cn=document.getElementById('className').value||'class';
   var a=document.createElement('a');
