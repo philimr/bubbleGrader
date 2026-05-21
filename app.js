@@ -63,6 +63,9 @@ var _editRosterId='';
 var _editRosterEntryIdx=0;
 var _rosterSortCol=null;
 var _rosterSortDir=0; // 0=default(last/first), 1=asc, 2=desc
+var _resultsSortCol=null;
+var _resultsSortDir=0; // 0=default, 1=asc ▲, 2=desc ▼
+var _analyticsSortMode=0; // 0=question#, 1=most correct, 2=most incorrect
 var _ansGridResizeObserver=null;
 var _scanSearchMatches=[]; // [{id, entry}] from live name/id search
 var _scanSearchIdx=0;
@@ -2046,15 +2049,22 @@ function buildResults(){
   var showClass=hasScanClass||(useRoster&&opt.cls);
   var showSection=useRoster&&opt.section;
   var showPeriod=hasScanPeriod||(useRoster&&opt.period);
+  // Helper: build a sortable <th>
+  function thSort(col,label){
+    var active=_resultsSortCol===col;
+    var arrow=active?(_resultsSortDir===1?' ▲':' ▼'):' ⇅';
+    var cls='sortable'+(active?' sorted':'');
+    return '<th class="'+cls+'" onclick="resultsSortBy(\''+col+'\')">'+label+arrow+'</th>';
+  }
   var thead=document.getElementById('resHead');
   if(thead){
     var hcols='<tr><th>#</th>';
-    if(useRoster){ hcols+='<th>Last</th><th>First</th>'; }
-    else { hcols+='<th>Student</th>'; }
-    if(showClass)   hcols+='<th>Class</th>';
-    if(showSection) hcols+='<th>Section</th>';
-    if(showPeriod)  hcols+='<th>Period</th>';
-    hcols+='<th>ID</th><th>Score</th><th>%</th><th>Status</th><th>Edit / Remove</th></tr>';
+    if(useRoster){ hcols+=thSort('last','Last')+thSort('first','First'); }
+    else { hcols+=thSort('name','Student'); }
+    if(showClass)   hcols+=thSort('class','Class');
+    if(showSection) hcols+=thSort('section','Section');
+    if(showPeriod)  hcols+=thSort('period','Period');
+    hcols+=thSort('id','ID')+thSort('score','Score')+thSort('pct','%')+thSort('status','Status')+'<th>Edit / Remove</th></tr>';
     thead.innerHTML=hcols;
   }
   // Last added
@@ -2065,26 +2075,61 @@ function buildResults(){
     var laName=laR?(laR.last+', '+laR.first):lastStu.name;
     laEl.innerHTML='Last added: <b>'+esc(laName)+'</b> &nbsp;'+lastStu.correct+'/'+lastStu.total+' ('+lastStu.pct+'%)';
   }
-  // Sort display: period → last name → first name (original indices preserved for delete)
+  // Build enriched rows for sorting (original indices preserved for delete/edit)
   var sorted=S.students.map(function(s,i){
     var r=useRoster?rosterGet(s.studentId):null;
     var per=String(s.period||(r?r.period:'')||'').trim();
     var parts=s.name.indexOf(', ')>=0?s.name.split(', '):['',''];
     var last=(r?r.last:parts[0]).trim().toLowerCase();
     var first=(r?r.first:parts.slice(1).join(', ')).trim().toLowerCase();
-    return{s:s,origIdx:i,r:r,per:per,perN:parseFloat(per),last:last,first:first};
+    var ok=s.pct>=pass;
+    return{s:s,origIdx:i,r:r,per:per,perN:parseFloat(per),last:last,first:first,ok:ok};
   });
-  sorted.sort(function(a,b){
-    var pna=a.perN,pnb=b.perN;
-    if(!isNaN(pna)&&!isNaN(pnb)&&pna!==pnb) return pna-pnb;
-    if(a.per!==b.per) return a.per<b.per?-1:1;
-    if(a.last!==b.last) return a.last<b.last?-1:1;
-    return a.first<b.first?-1:a.first>b.first?1:0;
-  });
+  if(_resultsSortCol===null){
+    // Default: period → last → first
+    sorted.sort(function(a,b){
+      var pna=a.perN,pnb=b.perN;
+      if(!isNaN(pna)&&!isNaN(pnb)&&pna!==pnb) return pna-pnb;
+      if(a.per!==b.per) return a.per<b.per?-1:1;
+      if(a.last!==b.last) return a.last<b.last?-1:1;
+      return a.first<b.first?-1:a.first>b.first?1:0;
+    });
+  } else {
+    var dir=_resultsSortDir===2?-1:1;
+    sorted.sort(function(a,b){
+      var va,vb;
+      switch(_resultsSortCol){
+        case 'last':    va=a.last; vb=b.last; break;
+        case 'first':   va=a.first; vb=b.first; break;
+        case 'name':    va=a.last+'\x00'+a.first; vb=b.last+'\x00'+b.first; break;
+        case 'class':   va=String(a.s.className||(a.r?a.r.cls:'')||'').toLowerCase(); vb=String(b.s.className||(b.r?b.r.cls:'')||'').toLowerCase(); break;
+        case 'section': va=String(a.r?a.r.section:'').toLowerCase(); vb=String(b.r?b.r.section:'').toLowerCase(); break;
+        case 'period':
+          var pna2=a.perN, pnb2=b.perN;
+          if(!isNaN(pna2)&&!isNaN(pnb2)){ va=pna2; vb=pnb2; break; }
+          va=a.per.toLowerCase(); vb=b.per.toLowerCase(); break;
+        case 'id':     va=a.s.studentId||''; vb=b.s.studentId||''; break;
+        case 'score':  va=a.s.pct; vb=b.s.pct; break;
+        case 'pct':    va=a.s.pct; vb=b.s.pct; break;
+        case 'status': va=a.ok?1:0; vb=b.ok?1:0; break;
+        default:       va=a.last; vb=b.last;
+      }
+      var cmp;
+      if(typeof va==='number'&&typeof vb==='number') cmp=va-vb;
+      else cmp=String(va)<String(vb)?-1:String(va)>String(vb)?1:0;
+      if(cmp!==0) return dir*cmp;
+      // Sub-sort by last → first for all columns except Last / First / Student
+      if(_resultsSortCol!=='last'&&_resultsSortCol!=='first'&&_resultsSortCol!=='name'){
+        if(a.last!==b.last) return a.last<b.last?-1:1;
+        return a.first<b.first?-1:a.first>b.first?1:0;
+      }
+      return 0;
+    });
+  }
   var tbody=document.getElementById('resBody'); tbody.innerHTML='';
   sorted.forEach(function(item,di){
     var s=item.s,r=item.r,origIdx=item.origIdx;
-    var ok=s.pct>=pass;
+    var ok=item.ok;
     var tr='<tr><td>'+(di+1)+'</td>';
     if(useRoster){
       tr+='<td>'+esc(r?r.last:s.name)+'</td><td>'+esc(r?r.first:'')+'</td>';
@@ -2339,6 +2384,22 @@ function rosterSortBy(col){
   buildRosterTable();
 }
 
+function resultsSortBy(col){
+  if(_resultsSortCol===col){
+    _resultsSortDir=(_resultsSortDir+1)%3;
+    if(_resultsSortDir===0) _resultsSortCol=null;
+  } else {
+    _resultsSortCol=col;
+    _resultsSortDir=1;
+  }
+  buildResults();
+}
+
+function cycleAnalyticsSort(){
+  _analyticsSortMode=(_analyticsSortMode+1)%3;
+  buildAnalytics();
+}
+
 function openEditRoster(id,entryIdx){
   var entries=rosterGetAll(id);
   var r=entries[entryIdx||0]||{};
@@ -2423,10 +2484,31 @@ function downloadRosterCSV(){
 function buildAnalytics(){
   var grid=document.getElementById('aqGrid'); grid.innerHTML='';
   var tot=S.students.length; if(!tot) return;
+  // Build question data
+  var questions=[];
   for(var q=0;q<activeQCount();q++){
     var cnt={A:0,B:0,C:0,D:0,E:0}, blank=0;
     S.students.forEach(function(s){ var a=s.answers[q]; if(a&&cnt[a]!==undefined) cnt[a]++; else blank++; });
-    var key=S.key[q], maxWrong='', maxN=0;
+    var key=S.key[q];
+    var pCor=key?Math.round((cnt[key]||0)/tot*100):0;
+    questions.push({q:q,cnt:cnt,blank:blank,key:key,pCor:pCor});
+  }
+  // Apply sort
+  if(_analyticsSortMode===1){
+    questions.sort(function(a,b){ return b.pCor-a.pCor||a.q-b.q; }); // most correct first
+  } else if(_analyticsSortMode===2){
+    questions.sort(function(a,b){ return a.pCor-b.pCor||a.q-b.q; }); // most incorrect (least correct) first
+  } // else mode 0: default order (question number)
+  // Update sort button label
+  var sortBtn=document.getElementById('btnAnalyticsSort');
+  if(sortBtn){
+    var sortLabels=['Sort: Default ↕','Sort: Most Correct ▼','Sort: Most Incorrect ▼'];
+    sortBtn.textContent=sortLabels[_analyticsSortMode];
+  }
+  // Render
+  questions.forEach(function(item){
+    var q=item.q, cnt=item.cnt, blank=item.blank, key=item.key, pCor=item.pCor;
+    var maxWrong='', maxN=0;
     CH.forEach(function(c){ if(c!==key&&cnt[c]>maxN){ maxN=cnt[c]; maxWrong=c; } });
     var bars='';
     CH.forEach(function(c){
@@ -2436,9 +2518,8 @@ function buildAnalytics(){
     });
     var blkPct=tot>0?blank/tot*100:0;
     bars+='<div class="brow"><span class="bc" style="color:var(--muted)">—</span><div class="btr"><div class="bfill" style="width:'+blkPct.toFixed(1)+'%;background:var(--muted)"></div></div><span class="bn">'+blank+'</span></div>';
-    var pCor=key?Math.round((cnt[key]||0)/tot*100):null;
     grid.innerHTML+='<div class="aqi"><div class="aqh"><span class="aql">Q'+(q+1)+'</span>'+(key?'<span class="aqk">Key: '+key+' · '+pCor+'% correct</span>':'<span style="color:var(--muted);font-size:11px">No key</span>')+'</div>'+bars+'</div>';
-  }
+  });
 }
 
 function exportCSV(){
