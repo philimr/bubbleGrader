@@ -279,11 +279,11 @@
     <!-- Info panel -->
     <div id="editInfoPanel">
       <div class="fr">
-        <div class="fg"><label class="fl">Last Name</label><input type="text" id="editLast" placeholder="Last name"></div>
-        <div class="fg"><label class="fl">First Name</label><input type="text" id="editFirst" placeholder="First name"></div>
+        <div class="fg"><label class="fl">Last Name</label><input type="text" id="editLast" placeholder="Last name" oninput="onEditInfoFieldInput('editLast')" onkeydown="onEditInfoFieldKeyDown(event,'editLast')"></div>
+        <div class="fg"><label class="fl">First Name</label><input type="text" id="editFirst" placeholder="First name" oninput="onEditInfoFieldInput('editFirst')" onkeydown="onEditInfoFieldKeyDown(event,'editFirst')"></div>
       </div>
       <div class="fr">
-        <div class="fg" style="flex:0 0 155px"><label class="fl">Student ID</label><input type="text" id="editStudentId" maxlength="8" style="font-family:monospace;letter-spacing:.08em"></div>
+        <div class="fg" style="flex:0 0 155px"><label class="fl">Student ID</label><input type="text" id="editStudentId" maxlength="8" style="font-family:monospace;letter-spacing:.08em" oninput="onEditInfoFieldInput('editStudentId')" onkeydown="onEditInfoFieldKeyDown(event,'editStudentId')"></div>
         <div class="fg" style="position:relative"><label class="fl">Class Name <button id="btnEditNextMatch" class="btn sm" style="position:absolute;right:0;top:0;display:none;font-size:8px;padding:2px 3px;background:lightgray;border-color:lightgray" onclick="nextEditMatch()">↻ Next Section</button></label><input type="text" id="editClassName"></div>
         <div class="fg" style="flex:0 0 100px"><label class="fl">Period</label><input type="text" id="editPeriod"></div>
       </div>
