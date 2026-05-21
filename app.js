@@ -66,6 +66,8 @@ var _rosterSortDir=0; // 0=default(last/first), 1=asc, 2=desc
 var _resultsSortCol=null;
 var _resultsSortDir=0; // 0=default, 1=asc ▲, 2=desc ▼
 var _analyticsSortMode=0; // 0=question#, 1=most correct, 2=most incorrect
+var _pendingImport=null;   // parsed CSV data waiting for user action
+var _importOverwriteConfirmed=false;
 var _ansGridResizeObserver=null;
 var _scanSearchMatches=[]; // [{id, entry}] from live name/id search
 var _scanSearchIdx=0;
@@ -2520,6 +2522,249 @@ function buildAnalytics(){
     bars+='<div class="brow"><span class="bc" style="color:var(--muted)">—</span><div class="btr"><div class="bfill" style="width:'+blkPct.toFixed(1)+'%;background:var(--muted)"></div></div><span class="bn">'+blank+'</span></div>';
     grid.innerHTML+='<div class="aqi"><div class="aqh"><span class="aql">Q'+(q+1)+'</span>'+(key?'<span class="aqk">Key: '+key+' · '+pCor+'% correct</span>':'<span style="color:var(--muted);font-size:11px">No key</span>')+'</div>'+bars+'</div>';
   });
+}
+
+// ── Import Results CSV ──
+function triggerImportResults(){
+  var inp=document.getElementById('importResultsFile');
+  inp.value=''; inp.click();
+}
+
+function importResultsCSV(e){
+  var file=e.target.files[0]; if(!file) return;
+  var reader=new FileReader();
+  reader.onload=function(ev){
+    var result=_parseResultsCSV(ev.target.result);
+    if(!result){ setAlert('err','Could not parse the results CSV. Make sure it was exported from this app.'); return; }
+    _pendingImport=result;
+    _showImportModal(result);
+  };
+  reader.readAsText(file);
+}
+
+function _parseResultsCSV(text){
+  var lines=text.split(/\r?\n/);
+  // Find header row: must contain both "Student" and "Last"
+  var headerIdx=-1;
+  for(var i=0;i<Math.min(lines.length,6);i++){
+    var ll=lines[i].toLowerCase();
+    if(ll.indexOf('student')>=0&&ll.indexOf('last')>=0){ headerIdx=i; break; }
+  }
+  if(headerIdx<0) return null;
+
+  var headers=parseCSVLine(lines[headerIdx]).map(function(h){return h.trim();});
+  function findCol(rx){ for(var ci=0;ci<headers.length;ci++) if(rx.test(headers[ci])) return ci; return -1; }
+
+  var colLast=findCol(/^last$/i);
+  var colFirst=findCol(/^first$/i);
+  var colId=findCol(/^student\s*id$/i);
+  var colClass=findCol(/^class$/i);
+  var colPeriod=findCol(/^period$/i);
+  var colScore=findCol(/^score$/i);
+  var colOutOf=findCol(/^out\s*of$/i);
+  var colPct=findCol(/^percentage$/i);
+  if(colId<0) return null;
+
+  // Numbered question columns (1, 2, 3 … 50 or 100)
+  var qCols=[];
+  headers.forEach(function(h,i){
+    var n=parseInt(h,10);
+    if(!isNaN(n)&&String(n)===h.trim()&&n>=1&&n<=100) qCols.push({col:i,qNum:n});
+  });
+  qCols.sort(function(a,b){return a.qNum-b.qNum;});
+  var qCount=qCols.length;
+  if(qCount!==50&&qCount!==100) return null;
+
+  // Parse student rows until blank line or analytics section
+  var students=[];
+  for(var ri=headerIdx+1;ri<lines.length;ri++){
+    var line=lines[ri].trim();
+    if(!line||/^question\s+analytics/i.test(line)) break;
+    var cols=parseCSVLine(lines[ri]);
+    if(cols.length<3) continue;
+    var last  =colLast>=0  ?(cols[colLast]||'').trim():'';
+    var first =colFirst>=0 ?(cols[colFirst]||'').trim():'';
+    var sid   =colId>=0    ?(cols[colId]||'').trim():'';
+    var cls   =colClass>=0 ?(cols[colClass]||'').trim():'';
+    var period=colPeriod>=0?(cols[colPeriod]||'').trim():'';
+    var correct=parseInt(colScore>=0?(cols[colScore]||''):'0')||0;
+    var total  =parseInt(colOutOf>=0?(cols[colOutOf]||''):'0')||qCount;
+    var pct    =parseInt((colPct>=0?(cols[colPct]||''):'0').replace('%',''))||0;
+    var answers=new Array(100).fill(null);
+    qCols.forEach(function(qc){
+      var a=(cols[qc.col]||'').trim().toUpperCase();
+      if(/^[ABCDE]$/.test(a)) answers[qc.qNum-1]=a;
+    });
+    students.push({
+      name:last&&first?last+', '+first:(last||first||''),
+      studentId:sid, answers:answers,
+      className:cls, period:period,
+      correct:correct, total:total, pct:pct
+    });
+  }
+  if(!students.length) return null;
+
+  // Parse answer key from Question Analytics section
+  var key=new Array(100).fill(null), hasKey=false;
+  var analyticsIdx=-1;
+  for(var ai=0;ai<lines.length;ai++){
+    if(/^question\s+analytics/i.test(lines[ai].trim())){ analyticsIdx=ai; break; }
+  }
+  if(analyticsIdx>=0){
+    for(var ki=analyticsIdx+1;ki<lines.length;ki++){
+      var kl=lines[ki].trim(); if(!kl) continue;
+      var kh=parseCSVLine(lines[ki]).map(function(h){return h.trim().toLowerCase();});
+      if(kh[0]==='question'&&kh.indexOf('key')>=0){
+        var keyCol=kh.indexOf('key');
+        for(var kri=ki+1;kri<lines.length;kri++){
+          var krl=lines[kri].trim(); if(!krl) break;
+          var kr=parseCSVLine(lines[kri]);
+          var qn=parseInt(kr[0]||'');
+          var ka=(kr[keyCol]||'').trim().toUpperCase();
+          if(!isNaN(qn)&&qn>=1&&qn<=100&&/^[ABCDE]$/.test(ka)){ key[qn-1]=ka; hasKey=true; }
+        }
+        break;
+      }
+    }
+  }
+
+  // Determine if merge is allowed
+  var mergeOk=false, mergeReason='';
+  if(S.students.length===0){
+    mergeOk=true;
+  } else if(qCount!==activeQCount()){
+    mergeReason='Question counts differ ('+qCount+' imported vs '+activeQCount()+' current).';
+  } else if(!hasKey){
+    mergeReason='No answer key in the CSV — cannot verify compatibility. Use Overwrite instead.';
+  } else {
+    var keyMismatch=false;
+    for(var ki2=0;ki2<qCount;ki2++){ if(key[ki2]!==S.key[ki2]){ keyMismatch=true; break; } }
+    if(keyMismatch) mergeReason='Answer keys do not match.';
+    else mergeOk=true;
+  }
+
+  // Count new vs duplicate (by student ID)
+  var existingIds={};
+  S.students.forEach(function(s){ if(s.studentId) existingIds[s.studentId]=true; });
+  var newCount=students.filter(function(s){ return !s.studentId||!existingIds[s.studentId]; }).length;
+  var skipCount=students.length-newCount;
+
+  return{students:students,key:key,qCount:qCount,hasKey:hasKey,
+         mergeOk:mergeOk,mergeReason:mergeReason,newCount:newCount,skipCount:skipCount};
+}
+
+function _showImportModal(r){
+  var hasExisting=S.students.length>0;
+  var html='<p>Found <strong>'+r.students.length+' student'+(r.students.length!==1?'s':'')+
+    '</strong> — '+r.qCount+' questions per sheet'+(r.hasKey?', answer key included':'')+'.</p>';
+  if(hasExisting){
+    html+='<p style="color:var(--muted)">You currently have <strong style="color:var(--txt)">'+
+      S.students.length+' student'+(S.students.length!==1?'s':'')+
+      '</strong> in the gradebook.</p>';
+  }
+  document.getElementById('importModalMsg').innerHTML=html;
+
+  // Merge section
+  var mb=document.getElementById('importMergeBtn');
+  var mn=document.getElementById('importMergeNote');
+  mb.disabled=false;
+  if(!hasExisting){
+    mn.textContent='No existing results — data will load directly.';
+    mb.textContent='↓ Import';
+  } else if(r.mergeOk){
+    var desc='Add '+r.newCount+' new student'+(r.newCount!==1?'s':'');
+    if(r.skipCount>0) desc+=' ('+r.skipCount+' duplicate ID'+(r.skipCount!==1?'s':'')+' skipped)';
+    desc+='. Current key & question count are preserved.';
+    mn.textContent=desc;
+    mb.textContent='↓ Merge into current results';
+  } else {
+    mn.textContent='Merge unavailable: '+r.mergeReason;
+    mb.disabled=true;
+    mb.textContent='Merge unavailable';
+  }
+  document.getElementById('importMergeSection').style.display='';
+
+  // Overwrite section (only when there is existing data to protect)
+  document.getElementById('importOverwriteSection').style.display=hasExisting?'':'none';
+  _importOverwriteConfirmed=false;
+  document.getElementById('importOverwriteWarn').style.display='none';
+  document.getElementById('importOverwriteBtn').textContent='⚠ Overwrite all data';
+
+  document.getElementById('importModal').style.display='';
+}
+
+// Shared: apply imported key + qCount to state and sync all UI inputs.
+// Must be called BEFORE any scoreOf() calls that depend on the new key.
+function _applyImportedSetup(r){
+  if(r.hasKey) S.key=r.key.slice();
+  S.qCount=r.qCount;
+  var qInp=document.getElementById('qCount');
+  if(qInp) qInp.value=S.qCount; // tplQCount is synced inside buildKeyGrid()
+}
+
+function confirmImportMerge(){
+  if(!_pendingImport) return;
+  var r=_pendingImport;
+  // Apply key + qCount before scoring so scoreOf() uses the correct key
+  _applyImportedSetup(r);
+  var existingIds={};
+  S.students.forEach(function(s){ if(s.studentId) existingIds[s.studentId]=true; });
+  var added=0;
+  r.students.forEach(function(s){
+    if(s.studentId&&existingIds[s.studentId]) return; // skip duplicate ID
+    var sc=scoreOf(s.answers,r.qCount);
+    S.students.push({
+      name:s.name, studentId:s.studentId,
+      answers:s.answers.slice(),
+      className:s.className, period:s.period,
+      correct:sc.noKey?s.correct:sc.correct,
+      total:sc.noKey?s.total:sc.total,
+      pct:sc.noKey?s.pct:sc.pct
+    });
+    added++;
+  });
+  closeImportModal();
+  saveData(); buildKeyGrid(); buildTemplate(); updateHeader(); buildResults();
+  var keyMsg=r.hasKey?'':' (no key in file — please enter the answer key on the Setup tab)';
+  setAlert('ok','Imported: '+added+' student'+(added!==1?'s':'')+' added'+keyMsg+'.');
+}
+
+function confirmImportOverwrite(){
+  if(!_pendingImport) return;
+  if(!_importOverwriteConfirmed){
+    // First click — show warning and arm the confirm button
+    var cnt=S.students.length;
+    document.getElementById('importOverwriteWarnCount').textContent=
+      cnt+' existing student record'+(cnt!==1?'s':'');
+    document.getElementById('importOverwriteWarn').style.display='';
+    document.getElementById('importOverwriteBtn').textContent='Confirm Overwrite — Erase & Replace';
+    _importOverwriteConfirmed=true;
+    return;
+  }
+  // Second click — do it
+  var r=_pendingImport;
+  // Apply key + qCount first so scoreOf() uses the correct key
+  _applyImportedSetup(r);
+  if(!r.hasKey) S.key=new Array(MAXQ).fill(null); // no key in file — clear it
+  S.students=r.students.map(function(s){
+    var sc=scoreOf(s.answers,r.qCount);
+    return{name:s.name, studentId:s.studentId,
+           answers:s.answers.slice(),
+           className:s.className, period:s.period,
+           correct:sc.noKey?s.correct:sc.correct,
+           total:sc.noKey?s.total:sc.total,
+           pct:sc.noKey?s.pct:sc.pct};
+  });
+  closeImportModal();
+  saveData(); buildKeyGrid(); buildTemplate(); updateHeader(); buildResults();
+  var keyMsg=r.hasKey?', key restored.':'. No key in file — please enter the answer key on the Setup tab.';
+  setAlert('ok','Overwrite complete: '+S.students.length+' student'+(S.students.length!==1?'s':'')+' imported'+keyMsg);
+}
+
+function closeImportModal(){
+  document.getElementById('importModal').style.display='none';
+  _pendingImport=null;
+  _importOverwriteConfirmed=false;
 }
 
 function exportCSV(){
