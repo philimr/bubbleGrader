@@ -67,6 +67,9 @@ var _ansGridResizeObserver=null;
 var _scanSearchMatches=[]; // [{id, entry}] from live name/id search
 var _scanSearchIdx=0;
 var _scanAutoLen={}; // typed length per field, before ghost was appended
+var _editSearchMatches=[]; // [{id, entry}] from live search in edit modal
+var _editSearchIdx=0;
+var _editAutoLen={};
 var cropState={active:false,dragging:false,startX:0,startY:0,x:0,y:0,w:0,h:0};
 var perspState={active:false,handles:null,dragging:-1};
 var previewReq=0;
@@ -2108,6 +2111,7 @@ function openEditInfo(origIdx){
   if(!s) return;
   _editIdx=origIdx;
   _editMatchIdx=0;
+  _editSearchMatches=[]; _editSearchIdx=0; _editAutoLen={};
   var parts=s.name&&s.name.indexOf(', ')>=0?s.name.split(', '):['',''];
   document.getElementById('editLast').value=parts[0]||'';
   document.getElementById('editFirst').value=parts.slice(1).join(', ')||'';
@@ -2124,7 +2128,7 @@ function openEditInfo(origIdx){
     }
   }
   var nmBtn=document.getElementById('btnEditNextMatch');
-  if(nmBtn) nmBtn.style.display=matches.length>1?'':'none';
+  if(nmBtn){nmBtn.style.display=matches.length>1?'':'none';nmBtn.textContent='↻ Next Section';}
   document.getElementById('editModalTitle').textContent='Edit Student Info';
   document.getElementById('editInfoPanel').style.display='';
   document.getElementById('editAnswersPanel').style.display='none';
@@ -2133,6 +2137,12 @@ function openEditInfo(origIdx){
 }
 
 function nextEditMatch(){
+  if(_editSearchMatches.length>1){
+    _editSearchIdx=(_editSearchIdx+1)%_editSearchMatches.length;
+    _applyEditSearchMatch(_editSearchMatches[_editSearchIdx],null);
+    return;
+  }
+  // Fallback: cycle same-ID multi-section entries
   var s=S.students[_editIdx];
   if(!s) return;
   var matches=rosterGetAll(s.studentId||'');
@@ -2143,6 +2153,73 @@ function nextEditMatch(){
   document.getElementById('editFirst').value=r.first||'';
   document.getElementById('editClassName').value=r.cls||'';
   document.getElementById('editPeriod').value=r.period||'';
+}
+
+function _applyEditSearchMatch(match,skipField){
+  var e=match.entry;
+  var lastEl=document.getElementById('editLast');
+  var firstEl=document.getElementById('editFirst');
+  var idEl=document.getElementById('editStudentId');
+  var clsEl=document.getElementById('editClassName');
+  var perEl=document.getElementById('editPeriod');
+  if(lastEl&&skipField!=='editLast') lastEl.value=e.last||'';
+  if(firstEl&&skipField!=='editFirst') firstEl.value=e.first||'';
+  if(idEl&&skipField!=='editStudentId') idEl.value=match.id||'';
+  if(clsEl&&e.cls) clsEl.value=e.cls;
+  if(perEl&&e.period) perEl.value=e.period;
+}
+
+function _applyEditGhost(sourceField,typedValue,match){
+  if(!typedValue) return;
+  var inp=document.getElementById(sourceField);
+  if(!inp) return;
+  var fullText;
+  if(sourceField==='editLast') fullText=match.entry.last||'';
+  else if(sourceField==='editFirst') fullText=match.entry.first||'';
+  else if(sourceField==='editStudentId') fullText=match.id||'';
+  else return;
+  if(!fullText.toLowerCase().startsWith(typedValue.toLowerCase())) return;
+  if(fullText.length<=typedValue.length) return;
+  inp.value=fullText;
+  inp.setSelectionRange(typedValue.length,fullText.length);
+  _editAutoLen[sourceField]=typedValue.length;
+}
+
+function _onEditInfoFieldSearch(sourceField,value,applyGhost){
+  var sf=sourceField==='editLast'?'stuLast':sourceField==='editFirst'?'stuFirst':'stuIdField';
+  var matches=value?rosterSearchByField(sf,value):[];
+  _editSearchMatches=matches;
+  _editSearchIdx=0;
+  var nmBtn=document.getElementById('btnEditNextMatch');
+  if(nmBtn){
+    nmBtn.style.display=matches.length>1?'':'none';
+    if(matches.length>1) nmBtn.textContent='↻ Next Match';
+  }
+  if(matches.length===0) return;
+  _applyEditSearchMatch(matches[0],sourceField);
+  if(applyGhost) _applyEditGhost(sourceField,value,matches[0]);
+}
+
+function onEditInfoFieldInput(sourceField){
+  if(!rosterHasData()) return;
+  var inp=document.getElementById(sourceField);
+  if(!inp) return;
+  _editAutoLen[sourceField]=inp.value.length;
+  _onEditInfoFieldSearch(sourceField,inp.value.trim(),true);
+}
+
+function onEditInfoFieldKeyDown(e,sourceField){
+  var inp=document.getElementById(sourceField);
+  if(!inp) return;
+  var start=inp.selectionStart, end=inp.selectionEnd;
+  if(e.key==='Backspace'&&start<end&&end===inp.value.length){
+    e.preventDefault();
+    var newLen=start>0?start-1:0;
+    inp.value=inp.value.substring(0,newLen);
+    inp.setSelectionRange(newLen,newLen);
+    _editAutoLen[sourceField]=newLen;
+    if(rosterHasData()) _onEditInfoFieldSearch(sourceField,inp.value.trim(),false);
+  }
 }
 
 function openEditAnswers(origIdx){
@@ -2241,6 +2318,7 @@ function saveEditAnswers(){
 function closeEditModal(){
   document.getElementById('editModal').style.display='none';
   _editIdx=-1;
+  _editSearchMatches=[]; _editSearchIdx=0; _editAutoLen={};
   if(_ansGridResizeObserver){_ansGridResizeObserver.disconnect();_ansGridResizeObserver=null;}
   var box=document.querySelector('#editModal .modal-box');
   if(box) box.style.minWidth='';
