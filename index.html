@@ -239,7 +239,10 @@
     <p class="hint">Clear results to reuse the current answer key for a new class. Clear key + results to start from scratch.</p>
   </div>
   <div id="noRes" class="card" style="text-align:center;color:var(--muted);padding:44px">
-    No students graded yet. Use the <strong>Scan</strong> tab to grade sheets.
+    <p>No students graded yet. Use the <strong>Scan</strong> tab to grade sheets.</p>
+    <p style="margin-top:14px">
+      <button class="btn" onclick="triggerImportResults()">↑ Import Previous Results CSV</button>
+    </p>
   </div>
   <div id="resContent" style="display:none">
     <div class="stats4" id="statsRow"></div>
@@ -247,6 +250,8 @@
       <div class="ch">
         <div class="ct">Class Scores</div>
         <span id="lastAdded" style="font-size:12px;color:var(--muted);margin-right:auto;padding-left:12px"></span>
+        <input type="file" id="importResultsFile" accept=".csv" style="display:none" onchange="importResultsCSV(event)">
+        <button class="btn" onclick="triggerImportResults()" style="margin-right: 10px;">↑ Import CSV</button>
         <button class="btn pa" onclick="exportCSV()">↓ Export CSV</button>
       </div>
       <div class="tbl-wrap">
@@ -320,6 +325,39 @@
         <button class="btn sm" onclick="closeEditModal()">Cancel</button>
         <button class="btn ga" onclick="saveEditRoster()">✓ Save</button>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- Import Results modal -->
+<div id="importModal" class="modal-overlay" style="display:none">
+  <div class="modal-box" style="max-width:480px;resize:none;min-height:0">
+    <div class="ch">
+      <div class="ct">Import Results CSV</div>
+      <button class="btn sm" onclick="closeImportModal()">✕ Close</button>
+    </div>
+    <div id="importModalMsg" style="font-size:14px;line-height:1.6;margin-bottom:14px"></div>
+
+    <!-- Merge option -->
+    <div id="importMergeSection" style="display:none;border:1px solid var(--bdr);border-radius:8px;padding:12px;margin-bottom:10px">
+      <div style="font-weight:600;margin-bottom:5px">Merge</div>
+      <div id="importMergeNote" style="font-size:13px;color:var(--muted);margin-bottom:10px"></div>
+      <button id="importMergeBtn" class="btn ga" onclick="confirmImportMerge()">↓ Import</button>
+    </div>
+
+    <!-- Overwrite option (only shown when existing data is present) -->
+    <div id="importOverwriteSection" style="display:none;border:1px solid var(--bdr);border-radius:8px;padding:12px;margin-bottom:10px">
+      <div style="font-weight:600;margin-bottom:5px">Overwrite</div>
+      <div style="font-size:13px;color:var(--muted);margin-bottom:10px">Replace all current students and the answer key with the imported file. The imported question count and key will become active.</div>
+      <!-- Warning panel — revealed on first overwrite click -->
+      <div id="importOverwriteWarn" style="display:none;background:var(--rbg);color:var(--red);border-radius:6px;padding:10px;margin-bottom:10px;font-size:13px;line-height:1.5">
+        ⚠ <strong>Warning:</strong> Your <strong id="importOverwriteWarnCount"></strong> and current answer key will be permanently erased. Export them first if you need them. Click <em>Confirm Overwrite</em> below to proceed.
+      </div>
+      <button id="importOverwriteBtn" class="btn" style="background:var(--red);color:#fff;border-color:var(--red)" onclick="confirmImportOverwrite()">⚠ Overwrite all data</button>
+    </div>
+
+    <div class="row" style="justify-content:flex-end">
+      <button class="btn sm" onclick="closeImportModal()">Cancel</button>
     </div>
   </div>
 </div>
